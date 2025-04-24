@@ -1,16 +1,32 @@
 from extensions import db
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+from sqlalchemy.orm import validates
 
 class User(db.Model):
     __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String, nullable=False, unique=True)
-    password_hash = db.Column(db.String, nullable=False)
-    role = db.Column(db.String, nullable=False, default='user')  # Default role is 'user'
+    email = db.Column(db.String(120), nullable=False, unique=True)
+    password_hash = db.Column(db.String(128), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default='user')  # Default role is 'user'
+
+    @validates('email')
+    def validate_email(self, key, email):
+        if '@' not in email or '.' not in email:
+            raise ValueError("Invalid email address")
+        return email
+
+    @validates('role')
+    def validate_role(self, key, role):
+        allowed_roles = ['user', 'admin', 'tech_writer']
+        if role not in allowed_roles:
+            raise ValueError(f"Role must be one of {allowed_roles}")
+        return role
 
     def set_password(self, password):
+        if len(password) < 8:
+            raise ValueError("Password must be at least 8 characters long")
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
@@ -23,6 +39,9 @@ class User(db.Model):
             self.role = 'tech_writer'
         else:
             self.role = 'user'
+
+    def __repr__(self):
+        return f"<User {self.email} ({self.role})>"
 
 class Content(db.Model):
     __tablename__ = 'contents'
@@ -44,6 +63,19 @@ class Content(db.Model):
     likes_dislikes = db.relationship('LikeDislike', backref='content', cascade='all, delete-orphan')
     wishlists = db.relationship('Wishlist', backref='content', cascade='all, delete-orphan')
 
+    @validates('title')
+    def validate_title(self, key, title):
+        if not title or len(title) < 5:
+            raise ValueError("Title must be at least 5 characters long")
+        return title
+
+    @validates('type')
+    def validate_type(self, key, type):
+        allowed_types = ['article', 'video', 'podcast']
+        if type not in allowed_types:
+            raise ValueError(f"Type must be one of {allowed_types}")
+        return type
+
     def __repr__(self):
         return f"<Content {self.title} ({self.type})>"
 
@@ -52,6 +84,12 @@ class Category(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False, unique=True)
+
+    @validates('name')
+    def validate_name(self, key, name):
+        if not name or len(name) < 3:
+            raise ValueError("Category name must be at least 3 characters long")
+        return name
 
     def __repr__(self):
         return f"<Category {self.name}>"
@@ -69,6 +107,12 @@ class Comment(db.Model):
 
     author = db.relationship('User', backref='comments')
     content = db.relationship('Content', backref='comments')
+
+    @validates('content')
+    def validate_content(self, key, content):
+        if not content or len(content) < 10:
+            raise ValueError("Comment content must be at least 10 characters long")
+        return content
 
     def __repr__(self):
         return f"<Comment {self.content[:20]}...>"
@@ -129,6 +173,12 @@ class FlaggedContent(db.Model):
 
     user = db.relationship('User', backref='flagged_contents')
     content = db.relationship('Content', backref='flagged_entries')
+
+    @validates('reason')
+    def validate_reason(self, key, reason):
+        if not reason or len(reason) > 255:
+            raise ValueError("Reason must not exceed 255 characters")
+        return reason
 
     def __repr__(self):
         return f"<FlaggedContent by User {self.user_id} on Content {self.content_id}>"
