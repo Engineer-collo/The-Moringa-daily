@@ -26,3 +26,109 @@ class User(db.Model):
         else:
             self.role = 'user'
     
+class Content(db.Model):
+    __tablename__ = 'contents'
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    type = db.Column(db.String(50), nullable=False)  #  'video', 'audio', 'blog'
+    body = db.Column(db.Text, nullable=True)  # could be text or a URL
+    status = db.Column(db.String(20), default='pending')  # 'pending', 'approved', 'flagged'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+    # Foreign keys
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
+
+    # Relationships
+    author = db.relationship('User', backref='contents')
+    category = db.relationship('Category', backref='contents')
+    comments = db.relationship('Comment', backref='content', cascade='all, delete-orphan')
+    likes_dislikes = db.relationship('LikeDislike', backref='content', cascade='all, delete-orphan')
+    wishlists = db.relationship('Wishlist', backref='content', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f"<Content {self.title} ({self.type})>"
+
+
+class category (db.Model):
+    __tablename__ = 'categories'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False, unique=True)
+
+    def __repr__(self):
+        return f"<Category {self.name}>"
+
+class Comment(db.Model):
+    __tablename__ = 'comments'
+
+    id = db.Column(db.Integer, primary_key=True)
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+    # Foreign keys
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    content_id = db.Column(db.Integer, db.ForeignKey('contents.id'), nullable=False)
+
+    # Relationships
+    author = db.relationship('User', backref='comments')
+    content = db.relationship('Content', backref='comments')
+
+    def __repr__(self):
+        return f"<Comment {self.content[:20]}...>"
+
+class LikeDislike(db.Model):
+    __tablename__ = 'likes_dislikes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    is_like = db.Column(db.Boolean, nullable=False)  # True = Like, False = Dislike
+
+    # Foreign keys
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    content_id = db.Column(db.Integer, db.ForeignKey('contents.id'), nullable=False)
+
+    # Relationships
+    user = db.relationship('User', backref='likes_dislikes')
+    content = db.relationship('Content', backref='likes_dislikes')
+
+    def __repr__(self):
+        return f"<LikeDislike by User {self.user_id} on Content {self.content_id} - {'Like' if self.is_like else 'Dislike'}>"
+
+class Notification(db.Model):
+    __tablename__ = 'notifications'
+
+    id = db.Column(db.Integer, primary_key=True)
+    message = db.Column(db.String(255), nullable=False)
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Foreign Key
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    # Relationship
+    user = db.relationship('User', backref='notifications')
+
+    def __repr__(self):
+        return f"<Notification to User {self.user_id} - Read: {self.is_read}>"
+
+class Wishlist(db.Model):
+      __tablename__ = 'wishlists'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Foreign Keys
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    content_id = db.Column(db.Integer, db.ForeignKey('contents.id'), nullable=False)
+
+    # Relationships
+    user = db.relationship('User', backref='wishlist_items')
+    content = db.relationship('Content', backref='wishlist_entries')
+
+    def __repr__(self):
+        return f"<Wishlist - User {self.user_id} saved Content {self.content_id}>"
+
+
+
