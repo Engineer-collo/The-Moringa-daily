@@ -5,6 +5,12 @@ name = "pypi"
 
 [packages]
 flask-sqlalchemy = "*"
+flask-migrate = "*"
+flask-jwt-extended = "*"
+werkzeug = "==2.2.3"
+flask-cors = "*"
+flask-restful = "*"
+faker = "*"
 
 [dev-packages]
 
