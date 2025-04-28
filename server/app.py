@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
 from datetime import timedelta
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 # ========== CONFIGURATION ==========
 
@@ -27,7 +27,7 @@ jwt = JWTManager(app)
 
 # ========== BLUEPRINT ==========
 
-resources_bp = Blueprint('resources', _name_)
+resources_bp = Blueprint('resources', __name__)
 
 # ========== ERROR HANDLING ==========
 
@@ -334,5 +334,5 @@ def approve_content(content_id):
 
 app.register_blueprint(resources_bp, url_prefix='/api')
 
-if _name_ == '_main_':
+if __name__ == '__main__':
     app.run(debug=True)
