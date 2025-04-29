@@ -19,11 +19,11 @@ def create_sample_data():
         user1.set_password("123456789")
         db.session.add(user1)
 
-        user2 = User(username="ken", email="ken@moringa.techwriter.com")
+        user2 = User(username="collax", email="collinsshunza@moringa.techwriter.com")
         user2.set_password("123456789")
         db.session.add(user2)
 
-        user3 = User(username="maryy", email="maryy@moringa.admin.com")
+        user3 = User(username="collorazy", email="collinsshunza@moringa.admin.com")
         user3.set_password("123456789")
         db.session.add(user3)
 
