@@ -269,6 +269,26 @@ def add_to_wishlist():
     db.session.commit()
     return jsonify(wishlist.to_dict()), 201
 
+@resources_bp.route('/wishlist', methods=['GET'])
+@jwt_required()
+def get_wishlist():
+    current_user = get_jwt_identity()
+    wishlist_items = Wishlist.query.filter_by(user_id=current_user).all()
+    return jsonify([item.to_dict() for item in wishlist_items]), 200
+
+@resources_bp.route('/wishlist/<int:wishlist_id>', methods=['DELETE'])
+@jwt_required()
+def remove_from_wishlist(wishlist_id):
+    current_user = get_jwt_identity()
+    wishlist_item = Wishlist.query.filter_by(id=wishlist_id, user_id=current_user).first()
+    
+    if not wishlist_item:
+        return jsonify({"error": "Wishlist item not found"}), 404
+    
+    db.session.delete(wishlist_item)
+    db.session.commit()
+    return jsonify({"message": "Item removed from wishlist"}), 200
+
 # ========== LIKE ROUTES ==========
 
 @resources_bp.route('/like', methods=['POST'])
@@ -280,6 +300,19 @@ def like_content():
     db.session.add(like)
     db.session.commit()
     return jsonify(like.to_dict()), 201
+
+@resources_bp.route('/like/<int:like_id>', methods=['DELETE'])
+@jwt_required()
+def unlike_content(like_id):
+    current_user = get_jwt_identity()
+    like = Like.query.filter_by(id=like_id, user_id=current_user).first()
+    
+    if not like:
+        return jsonify({"error": "Like not found"}), 404
+    
+    db.session.delete(like)
+    db.session.commit()
+    return jsonify({"message": "Content unliked"}), 200
 
 # ========== SHARE ROUTES ==========
 
@@ -328,11 +361,133 @@ def approve_content(content_id):
     db.session.commit()
     return jsonify({"message": "Content approved successfully"}), 200
 
+# ========== COMMENT ROUTES ==========
 
+@resources_bp.route('/content/<int:content_id>/comments', methods=['GET'])
+def get_content_comments(content_id):
+    comments = Comment.query.filter_by(content_id=content_id).order_by(Comment.created_at.desc()).all()
+    return jsonify([comment.to_dict() for comment in comments]), 200
+
+@resources_bp.route('/comments', methods=['POST'])
+@jwt_required()
+def add_comment():
+    data = request.get_json()
+    current_user = get_jwt_identity()
+    
+    if 'content_id' not in data or 'body' not in data:
+        return jsonify({"error": "content_id and body are required"}), 400
+    
+    comment = Comment(
+        user_id=current_user,
+        content_id=data['content_id'],
+        body=data['body']
+    )
+    
+    db.session.add(comment)
+    db.session.commit()
+    
+    # Create notification for content author
+    content = Content.query.get(data['content_id'])
+    if content and content.author_id != current_user:
+        notification = Notification(
+            user_id=content.author_id,
+            message=f"New comment on your post: {data['body'][:30]}..."
+        )
+        db.session.add(notification)
+        db.session.commit()
+    
+    return jsonify(comment.to_dict()), 201
+
+@resources_bp.route('/comments/<int:comment_id>', methods=['DELETE'])
+@jwt_required()
+def delete_comment(comment_id):
+    current_user = get_jwt_identity()
+    comment = Comment.query.get_or_404(comment_id)
+    
+    if comment.user_id != current_user:
+        user = User.query.get(current_user)
+        if not user or user.role != 'admin':
+            return jsonify({"error": "Unauthorized to delete this comment"}), 403
+    
+    db.session.delete(comment)
+    db.session.commit()
+    return jsonify({"message": "Comment deleted"}), 200
+
+# ========== NOTIFICATION ROUTES ==========
+
+@resources_bp.route('/notifications', methods=['GET'])
+@jwt_required()
+def get_notifications():
+    current_user = get_jwt_identity()
+    notifications = Notification.query.filter_by(user_id=current_user)\
+        .order_by(Notification.created_at.desc()).all()
+    return jsonify([n.to_dict() for n in notifications]), 200
+
+@resources_bp.route('/notifications/<int:notification_id>/read', methods=['PATCH'])
+@jwt_required()
+def mark_notification_read(notification_id):
+    current_user = get_jwt_identity()
+    notification = Notification.query.filter_by(
+        id=notification_id, 
+        user_id=current_user
+    ).first()
+    
+    if not notification:
+        return jsonify({"error": "Notification not found"}), 404
+    
+    notification.is_read = True
+    db.session.commit()
+    return jsonify(notification.to_dict()), 200
+
+# ========== CONTENT STATS ROUTES ==========
+
+@resources_bp.route('/content/<int:content_id>/stats', methods=['GET'])
+def get_content_stats(content_id):
+    content = Content.query.get_or_404(content_id)
+    
+    stats = {
+        'likes_count': Like.query.filter_by(content_id=content_id).count(),
+        'comments_count': Comment.query.filter_by(content_id=content_id).count(),
+        'shares_count': Share.query.filter_by(content_id=content_id).count()
+    }
+    
+    return jsonify(stats), 200
+
+# ========== USER CONTENT ROUTES ==========
+
+@resources_bp.route('/user/<int:user_id>/content', methods=['GET'])
+def get_user_content(user_id):
+    content = Content.query.filter_by(author_id=user_id)\
+        .order_by(Content.created_at.desc()).all()
+    return jsonify([c.to_dict() for c in content]), 200
+
+# ========== SEARCH ROUTES ==========
+
+@resources_bp.route('/search', methods=['GET'])
+def search_content():
+    query = request.args.get('q')
+    if not query or len(query) < 2:
+        return jsonify({"error": "Search query must be at least 2 characters"}), 400
+    
+    # Search in titles and bodies
+    content_results = Content.query.filter(
+        (Content.title.ilike(f'%{query}%')) | 
+        (Content.body.ilike(f'%{query}%'))
+    ).all()
+    
+    # Search in categories
+    category_results = Category.query.filter(
+        Category.name.ilike(f'%{query}%')
+    ).all()
+    
+    return jsonify({
+        'content': [c.to_dict() for c in content_results],
+        'categories': [cat.to_dict() for cat in category_results]
+    }), 200
 
 # ========== ADD BLUEPRINT TO APP ==========
 
 app.register_blueprint(resources_bp, url_prefix='/api')
 
-if __name__ == '__main__':
-    app.run(debug=True)
+
+if __name__ == '_main_':

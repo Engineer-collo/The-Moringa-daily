@@ -3,7 +3,6 @@ from datetime import datetime
 from sqlalchemy.orm import validates
 from werkzeug.security import generate_password_hash, check_password_hash
 
-# Initialize SQLAlchemy
 db = SQLAlchemy()
 
 # Centralized Serialization Mixin
@@ -32,7 +31,7 @@ class User(db.Model, SerializableMixin):
     content_subscriptions = db.relationship("ContentSubscription", back_populates="user")
     wishlists = db.relationship("Wishlist", back_populates="user")
     shares = db.relationship("Share", back_populates="user")
-    likes = db.relationship("Like", back_populates="user")  # Added likes relationship
+    likes = db.relationship("Like", back_populates="user")
 
     @validates("email")
     def validate_email(self, key, email):
@@ -45,22 +44,24 @@ class User(db.Model, SerializableMixin):
             raise ValueError("Invalid email domain.")
         return email
 
+    @validates("username")
+    def validate_username(self, key, username):
+        if not username or len(username) < 3:
+            raise ValueError("Username must be at least 3 characters long.")
+        return username
+
     def assign_role(self):
         if self.email.endswith('@moringa.admin.com'):
             self.role = "admin"
         elif self.email.endswith('@moringa.techwriter.com'):
             self.role = "techwriter"
-        elif self.email.endswith('@moringa.student.com'):
-            self.role = "user"
         else:
             self.role = "user"
 
     def set_password(self, password):
-        """Set the password after hashing it."""
         self.password = generate_password_hash(password)
 
     def check_password(self, password):
-        """Check if the provided password matches the hashed password."""
         return check_password_hash(self.password, password)
 
 # Profile Model
@@ -98,13 +99,26 @@ class Content(db.Model, SerializableMixin):
     likes = db.relationship("Like", back_populates="content")
     shares = db.relationship("Share", back_populates="content")
     subscriptions = db.relationship("ContentSubscription", back_populates="content")
-    wishlists = db.relationship("Wishlist", back_populates="content")  # Added reverse relationship for wishlists
+    wishlists = db.relationship("Wishlist", back_populates="content")
 
     @validates("title")
     def validate_title(self, key, title):
         if len(title) < 5:
             raise ValueError("Title must be at least 5 characters long.")
         return title
+
+    @validates("body")
+    def validate_body(self, key, body):
+        if not body or len(body.strip()) < 10:
+            raise ValueError("Content body must be at least 10 characters long.")
+        return body
+
+    @validates("content_type")
+    def validate_content_type(self, key, value):
+        allowed_types = ['article', 'video', 'podcast', 'document']
+        if value not in allowed_types:
+            raise ValueError(f"Invalid content type. Allowed: {allowed_types}")
+        return value
 
 # Category Model
 class Category(db.Model, SerializableMixin):
@@ -116,6 +130,12 @@ class Category(db.Model, SerializableMixin):
 
     content = db.relationship("Content", back_populates="category")
     subscriptions = db.relationship("Subscription", back_populates="category")
+
+    @validates("name")
+    def validate_name(self, key, name):
+        if not name or len(name) < 3:
+            raise ValueError("Category name must be at least 3 characters long.")
+        return name
 
 # Subscription Model (for Categories)
 class Subscription(db.Model, SerializableMixin):
@@ -129,7 +149,7 @@ class Subscription(db.Model, SerializableMixin):
     user = db.relationship("User", back_populates="category_subscriptions")
     category = db.relationship("Category", back_populates="subscriptions")
 
-# ContentSubscription Model (for Content)
+# ContentSubscription Model
 class ContentSubscription(db.Model, SerializableMixin):
     __tablename__ = 'content_subscriptions'
 
@@ -151,7 +171,7 @@ class Wishlist(db.Model, SerializableMixin):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship("User", back_populates="wishlists")
-    content = db.relationship("Content", back_populates="wishlists")  # Added reverse relationship for content
+    content = db.relationship("Content", back_populates="wishlists")
 
 # Comment Model
 class Comment(db.Model, SerializableMixin):
@@ -166,6 +186,12 @@ class Comment(db.Model, SerializableMixin):
     user = db.relationship("User", back_populates="comments")
     content = db.relationship("Content", back_populates="comments")
 
+    @validates("body")
+    def validate_body(self, key, body):
+        if not body or len(body.strip()) < 2:
+            raise ValueError("Comment body must be at least 2 characters long.")
+        return body
+
 # Like Model
 class Like(db.Model, SerializableMixin):
     __tablename__ = 'likes'
@@ -175,7 +201,7 @@ class Like(db.Model, SerializableMixin):
     content_id = db.Column(db.Integer, db.ForeignKey('content.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    user = db.relationship("User", back_populates="likes")  # Added reverse relationship for user
+    user = db.relationship("User", back_populates="likes")
     content = db.relationship("Content", back_populates="likes")
 
 # Notification Model
@@ -190,6 +216,12 @@ class Notification(db.Model, SerializableMixin):
 
     user = db.relationship("User", back_populates="notifications")
 
+    @validates("message")
+    def validate_message(self, key, value):
+        if not value or len(value.strip()) < 5:
+            raise ValueError("Notification message must be at least 5 characters long.")
+        return value
+
 # Share Model
 class Share(db.Model, SerializableMixin):
     __tablename__ = 'shares'
@@ -197,8 +229,16 @@ class Share(db.Model, SerializableMixin):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content_id = db.Column(db.Integer, db.ForeignKey('content.id'), nullable=False)
-    shared_with = db.Column(db.String(255), nullable=False)  # For whom the content is shared
+    shared_with = db.Column(db.String(255), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship("User", back_populates="shares")
     content = db.relationship("Content", back_populates="shares")
+
+
+    @validates("shared_with")
+    def validate_shared_with(self, key, value):
+        if not value or '@' not in value:
+            raise ValueError("shared_with must be a valid email address.")
+        return value
+
