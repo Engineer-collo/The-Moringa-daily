@@ -235,8 +235,10 @@ class Share(db.Model, SerializableMixin):
     user = db.relationship("User", back_populates="shares")
     content = db.relationship("Content", back_populates="shares")
 
+
     @validates("shared_with")
     def validate_shared_with(self, key, value):
         if not value or '@' not in value:
             raise ValueError("shared_with must be a valid email address.")
         return value
+

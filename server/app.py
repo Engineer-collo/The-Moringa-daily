@@ -27,7 +27,7 @@ jwt = JWTManager(app)
 
 # ========== BLUEPRINT ==========
 
-resources_bp = Blueprint('resources', _name_)
+resources_bp = Blueprint('resources', __name__)
 
 # ========== ERROR HANDLING ==========
 
@@ -489,5 +489,5 @@ def search_content():
 
 app.register_blueprint(resources_bp, url_prefix='/api')
 
+
 if __name__ == '_main_':
-    app.run(debug=True)
