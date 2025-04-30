@@ -163,8 +163,13 @@ class Comment(db.Model, SerializableMixin):
     body = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    
+    parent_comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
+
+    
     user = db.relationship("User", back_populates="comments")
     content = db.relationship("Content", back_populates="comments")
+    replies = db.relationship("Comment", backref=db.backref("parent", remote_side=[id]), lazy=True)
 
 # Like Model
 class Like(db.Model, SerializableMixin):
