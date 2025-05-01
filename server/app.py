@@ -314,6 +314,24 @@ def unlike_content(like_id):
     db.session.commit()
     return jsonify({"message": "Content unliked"}), 200
 
+# ========== COMMENT ROUTES ==========
+
+@resources_bp.route('/content/<int:content_id>/comments', methods=['GET'])
+@jwt_required()
+def get_threaded_comments(content_id):
+    top_level = Comment.query.filter_by(content_id=content_id, parent_comment_id=None).all()
+    return jsonify([build_comment_tree(comment) for comment in top_level])
+
+def build_comment_tree(comment):
+    return {
+        "id": comment.id,
+        "user": comment.user.username,
+        "body": comment.body,
+        "created_at": comment.created_at.isoformat(),
+        "replies": [build_comment_tree(c) for c in comment.replies]
+    }
+
+
 # ========== SHARE ROUTES ==========
 
 @resources_bp.route('/share', methods=['POST'])
@@ -488,6 +506,7 @@ def search_content():
 # ========== ADD BLUEPRINT TO APP ==========
 
 app.register_blueprint(resources_bp, url_prefix='/api')
+
 
 
 if __name__ == '_main_':

@@ -183,8 +183,13 @@ class Comment(db.Model, SerializableMixin):
     body = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    
+    parent_comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
+
+    
     user = db.relationship("User", back_populates="comments")
     content = db.relationship("Content", back_populates="comments")
+    replies = db.relationship("Comment", backref=db.backref("parent", remote_side=[id]), lazy=True)
 
     @validates("body")
     def validate_body(self, key, body):
@@ -199,6 +204,7 @@ class Like(db.Model, SerializableMixin):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content_id = db.Column(db.Integer, db.ForeignKey('content.id'), nullable=False)
+    is_like = db.Column(db.Boolean, nullable=False)  # True = like, False = dislike
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship("User", back_populates="likes")
