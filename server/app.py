@@ -87,13 +87,11 @@ def register():
         return jsonify({"error": "Password is required"}), 400
 
     try:
-        hashed_password = generate_password_hash(data['password'], method='sha256')
-        
-        # Create new user with all required fields including username
+        # Use generate_password_hash with correct method directly
         user = User(
             username=data['username'],
             email=data['email'],
-            password=hashed_password
+            password=generate_password_hash(data['password'], method='pbkdf2:sha256')
         )
         user.assign_role()  # If you have a method to assign role
         
@@ -111,7 +109,8 @@ def login():
     data = request.get_json()
     user = User.query.filter_by(email=data['email']).first()
     if user and check_password_hash(user.password, data['password']):
-        access_token = create_access_token(identity=user.id)
+        additional_claims = {"role": user.role} if hasattr(user, 'role') else {}
+        access_token = create_access_token(identity=user.id, additional_claims=additional_claims)
         return jsonify(access_token=access_token), 200
     return jsonify({"error": "Invalid credentials"}), 401
 
