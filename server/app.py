@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
 from datetime import timedelta
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 # ========== CONFIGURATION ==========
 
@@ -27,7 +27,7 @@ jwt = JWTManager(app)
 
 # ========== BLUEPRINT ==========
 
-resources_bp = Blueprint('resources', _name_)
+resources_bp = Blueprint('resources', __name__)
 
 # ========== ERROR HANDLING ==========
 
@@ -111,7 +111,10 @@ def login():
     data = request.get_json()
     user = User.query.filter_by(email=data['email']).first()
     if user and check_password_hash(user.password, data['password']):
-        access_token = create_access_token(identity=user.id)
+        access_token = create_access_token(
+            identity=user.id,
+            additional_claims={"role": user.role}
+            )
         return jsonify(access_token=access_token), 200
     return jsonify({"error": "Invalid credentials"}), 401
 
@@ -334,5 +337,5 @@ def approve_content(content_id):
 
 app.register_blueprint(resources_bp, url_prefix='/api')
 
-if _name_ == '_main_':
+if __name__ == '_main_':
     app.run(debug=True)

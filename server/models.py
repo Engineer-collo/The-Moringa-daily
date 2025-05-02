@@ -9,12 +9,12 @@ db = SQLAlchemy()
 # Centralized Serialization Mixin
 class SerializableMixin:
     def to_dict(self):
-        columns = self._table_.columns.keys()
+        columns = self.__table__.columns.keys()
         return {column: getattr(self, column) for column in columns}
 
 # User Model
 class User(db.Model, SerializableMixin):
-    _tablename_ = 'users'
+    __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False) 
@@ -65,7 +65,7 @@ class User(db.Model, SerializableMixin):
 
 # Profile Model
 class Profile(db.Model, SerializableMixin):
-    _tablename_ = 'profiles'
+    __tablename__ = 'profiles'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -79,7 +79,7 @@ class Profile(db.Model, SerializableMixin):
 
 # Content Model
 class Content(db.Model, SerializableMixin):
-    _tablename_ = 'content'
+    __tablename__ = 'content'
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(255), nullable=False)
@@ -108,7 +108,7 @@ class Content(db.Model, SerializableMixin):
 
 # Category Model
 class Category(db.Model, SerializableMixin):
-    _tablename_ = 'categories'
+    __tablename__ = 'categories'
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False, unique=True)
@@ -119,7 +119,7 @@ class Category(db.Model, SerializableMixin):
 
 # Subscription Model (for Categories)
 class Subscription(db.Model, SerializableMixin):
-    _tablename_ = 'subscriptions'
+    __tablename__ = 'subscriptions'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -131,7 +131,7 @@ class Subscription(db.Model, SerializableMixin):
 
 # ContentSubscription Model (for Content)
 class ContentSubscription(db.Model, SerializableMixin):
-    _tablename_ = 'content_subscriptions'
+    __tablename__ = 'content_subscriptions'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -143,7 +143,7 @@ class ContentSubscription(db.Model, SerializableMixin):
 
 # Wishlist Model
 class Wishlist(db.Model, SerializableMixin):
-    _tablename_ = 'wishlists'
+    __tablename__ = 'wishlists'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -155,7 +155,7 @@ class Wishlist(db.Model, SerializableMixin):
 
 # Comment Model
 class Comment(db.Model, SerializableMixin):
-    _tablename_ = 'comments'
+    __tablename__ = 'comments'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -168,7 +168,7 @@ class Comment(db.Model, SerializableMixin):
 
 # Like Model
 class Like(db.Model, SerializableMixin):
-    _tablename_ = 'likes'
+    __tablename__ = 'likes'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -180,7 +180,7 @@ class Like(db.Model, SerializableMixin):
 
 # Notification Model
 class Notification(db.Model, SerializableMixin):
-    _tablename_ = 'notifications'
+    __tablename__ = 'notifications'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
@@ -192,7 +192,7 @@ class Notification(db.Model, SerializableMixin):
 
 # Share Model
 class Share(db.Model, SerializableMixin):
-    _tablename_ = 'shares'
+    __tablename__ = 'shares'
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
