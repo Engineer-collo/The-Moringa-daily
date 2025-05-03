@@ -87,7 +87,7 @@ def register():
         return jsonify({"error": "Password is required"}), 400
 
     try:
-        hashed_password = generate_password_hash(data['password'], method='sha256')
+        hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
         
         # Create new user with all required fields including username
         user = User(
