@@ -43,7 +43,7 @@ def create_sample_data():
 
         # Create some sample content posts
         content1 = Content(title="The Future of AI", body="Artificial Intelligence is evolving fast...", content_type="Article", author_id=user1.id, category_id=category1.id)
-        content2 = Content(title="Space Exploration", body="Humanity is moving towards the stars...", content_type="Article", author_id=user2.id, category_id=category2.id)
+        content2 = Content(titlcollinsshue="Space Exploration", body="Humanity is moving towards the stars...", content_type="Article", author_id=user2.id, category_id=category2.id)
         content3 = Content(title="E-learning Trends", body="Online education is on the rise...", content_type="Article", author_id=user3.id, category_id=category3.id)
         db.session.add_all([content1, content2, content3])
         db.session.commit()  # Ensure content records are committed before creating comments
