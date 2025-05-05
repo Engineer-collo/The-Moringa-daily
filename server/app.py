@@ -4,7 +4,7 @@ from flask_cors import CORS
 from flask_restful import Api
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
+from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
 from datetime import timedelta
 
 app = Flask(__name__)
@@ -348,6 +348,50 @@ def approve_content(content_id):
     content.approved = True
     db.session.commit()
     return jsonify({"message": "Content approved successfully"}), 200
+
+# --- Chat System  ROUTES---
+@resources_bp.route('/api/chats', methods=['GET'])
+@jwt_required()
+def get_all_chats():
+    current_user = get_jwt_identity()
+    chats = Conversation.query.filter((Conversation.user1_id == current_user) | (Conversation.user2_id == current_user)).all()
+    return jsonify([c.id for c in chats]), 200
+
+@resources_bp.route('/api/chats/<int:recipient_id>', methods=['GET', 'POST'])
+@jwt_required()
+def handle_chat(recipient_id):
+    current_user = get_jwt_identity()
+    conversation = Conversation.query.filter_by(user1_id=min(current_user, recipient_id), user2_id=max(current_user, recipient_id)).first()
+    if not conversation:
+        if request.method == 'POST':
+            conversation = Conversation(user1_id=min(current_user, recipient_id), user2_id=max(current_user, recipient_id))
+            db.session.add(conversation)
+            db.session.commit()
+        else:
+            return jsonify([]), 200
+
+    if request.method == 'POST':
+        data = request.get_json()
+        message = Message(
+            conversation_id=conversation.id,
+            sender_id=current_user,
+            recipient_id=recipient_id,
+            content=data['content']
+        )
+        db.session.add(message)
+        db.session.commit()
+        return jsonify({"message": "sent"}), 201
+    
+    messages = Message.query.filter_by(conversation_id=conversation.id).all()
+    return jsonify([m.content for m in messages]), 200
+
+@resources_bp.route('/api/chats/shared-content', methods=['GET'])
+@jwt_required()
+def get_shared_content():
+    current_user = get_jwt_identity()
+    shares = Share.query.filter_by(user_id=current_user).all()
+    return jsonify([s.to_dict() for s in shares]), 200
+
 
 
 
