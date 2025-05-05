@@ -163,8 +163,13 @@ class Comment(db.Model, SerializableMixin):
     body = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    
+    parent_comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
+
+    
     user = db.relationship("User", back_populates="comments")
     content = db.relationship("Content", back_populates="comments")
+    replies = db.relationship("Comment", backref=db.backref("parent", remote_side=[id]), lazy=True)
 
 # Like Model
 class Like(db.Model, SerializableMixin):
@@ -173,6 +178,7 @@ class Like(db.Model, SerializableMixin):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content_id = db.Column(db.Integer, db.ForeignKey('content.id'), nullable=False)
+    is_like = db.Column(db.Boolean, nullable=False)  # True = like, False = dislike
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship("User", back_populates="likes")  # Added reverse relationship for user
@@ -202,3 +208,22 @@ class Share(db.Model, SerializableMixin):
 
     user = db.relationship("User", back_populates="shares")
     content = db.relationship("Content", back_populates="shares")
+
+
+#  Chat System (conversation and message models)
+
+class Conversation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user1_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user2_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    messages = db.relationship('Message', backref='conversation', lazy=True)
+
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey('conversation.id'))
+    sender_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    recipient_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=db.func.now())
+
