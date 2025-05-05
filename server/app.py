@@ -86,6 +86,10 @@ def register():
     if 'password' not in data or not data['password']:
         return jsonify({"error": "Password is required"}), 400
 
+    # Check if email already exists
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({"error": "Email already registered"}), 400
+
     try:
         # Use generate_password_hash with correct method directly
         user = User(
