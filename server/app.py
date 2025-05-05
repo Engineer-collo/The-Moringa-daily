@@ -8,17 +8,10 @@ from server.models import db, User, Profile, Content, Category, Subscription, Co
 from datetime import timedelta
 from server.cloudinary_utils.video_upload import video_upload_bp
 
-app = Flask(__name__)
+app = Flask(__name__, instance_relative_config=True)
+app.config.from_object('server.config')
 
 app.register_blueprint(video_upload_bp, url_prefix='/api/video_upload')
-
-# ========== CONFIGURATION ==========
-
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///moringa.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = '4bfbece877bc4c6a9276b4f9f0203a45d722bbfd02728c7d823438120c8b5c91'
-app.config['JWT_SECRET_KEY'] = 'd9cbf61a59b0c1e24e9fc62547c3d524c97a35d7e283c902835de5d61b126bde'
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=10)
 
 # ========== INITIALIZE EXTENSIONS ==========
 
