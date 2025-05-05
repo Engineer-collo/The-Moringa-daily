@@ -23,7 +23,7 @@ jwt = JWTManager(app)
 
 # ========== BLUEPRINT ==========
 
-resources_bp = Blueprint('resources', ___name___)
+resources_bp = Blueprint('resources', __name__)
 
 # ========== ERROR HANDLING ==========
 
@@ -97,7 +97,8 @@ def register():
             password=generate_password_hash(data['password'], method='pbkdf2:sha256')
         )
         user.assign_role()  # If you have a method to assign role
-        
+    
+
         db.session.add(user)
         db.session.commit()
         
@@ -115,8 +116,7 @@ def login():
         additional_claims = {"role": user.role} if hasattr(user, 'role') else {}
         access_token = create_access_token(
             identity=user.id,
-            additional_claims={"role": user.role}
-            , additional_claims=additional_claims)
+            additional_claims=additional_claims)
         return jsonify(access_token=access_token), 200
     return jsonify({"error": "Invalid credentials"}), 401
 
