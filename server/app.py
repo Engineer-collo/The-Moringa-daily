@@ -6,7 +6,7 @@ from flask_jwt_extended import JWTManager, create_access_token, jwt_required, ge
 from werkzeug.security import generate_password_hash, check_password_hash
 from server.models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
 from datetime import timedelta
-from .cloudinary_utils.video_upload import video_upload_bp
+from server.cloudinary_utils.video_upload import video_upload_bp
 
 app = Flask(__name__)
 

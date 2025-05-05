@@ -1,6 +1,6 @@
 from datetime import datetime
-from app import app, db  # replace 'yourapp' with the actual module name (e.g., 'app')
-from models import User, Content, Category, Profile, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
+from server.app import app, db  
+from server.models import User, Content, Category, Profile, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
 
 def create_sample_data():
     with app.app_context():
