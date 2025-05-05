@@ -4,12 +4,12 @@ from flask_cors import CORS
 from flask_restful import Api
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, unset_jwt_cookies
 from werkzeug.security import generate_password_hash, check_password_hash
-from server.models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
+from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
 from datetime import timedelta
-from server.cloudinary_utils.video_upload import video_upload_bp
+from cloudinary_utils.video_upload import video_upload_bp
 
 app = Flask(__name__, instance_relative_config=True)
-app.config.from_object('server.config')
+app.config.from_object('config')
 
 app.register_blueprint(video_upload_bp, url_prefix='/api/video_upload')
 
