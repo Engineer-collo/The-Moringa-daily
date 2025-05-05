@@ -4,7 +4,7 @@ from flask_cors import CORS
 from flask_restful import Api
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
+from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share , Chat 
 from datetime import timedelta
 
 app = Flask(__name__)
@@ -502,6 +502,55 @@ def search_content():
         'content': [c.to_dict() for c in content_results],
         'categories': [cat.to_dict() for cat in category_results]
     }), 200
+
+@resources_bp.route('/chats', methods=['POST'])
+@jwt_required()
+def send_message():
+    """Send a chat message."""
+    data = request.get_json()
+    current_user = get_jwt_identity()
+
+    if 'receiver_id' not in data or 'message' not in data:
+        return jsonify({"error": "receiver_id and message are required"}), 400
+
+    chat = Chat(
+        sender_id=current_user,
+        receiver_id=data['receiver_id'],
+        message=data['message']
+    )
+    db.session.add(chat)
+    db.session.commit()
+    return jsonify(chat.to_dict()), 201
+
+
+@resources_bp.route('/chats/<int:user_id>', methods=['GET'])
+@jwt_required()
+def get_chat_history(user_id):
+    """Retrieve chat history between the current user and another user."""
+    current_user = get_jwt_identity()
+
+    chats = Chat.query.filter(
+        ((Chat.sender_id == current_user) & (Chat.receiver_id == user_id)) |
+        ((Chat.sender_id == user_id) & (Chat.receiver_id == current_user))
+    ).order_by(Chat.created_at.asc()).all()
+
+    return jsonify([chat.to_dict() for chat in chats]), 200
+
+
+@resources_bp.route('/chats/<int:chat_id>/read', methods=['PATCH'])
+@jwt_required()
+def mark_chat_as_read(chat_id):
+    """Mark a chat message as read."""
+    current_user = get_jwt_identity()
+
+    chat = Chat.query.filter_by(id=chat_id, receiver_id=current_user).first()
+    if not chat:
+        return jsonify({"error": "Chat message not found or unauthorized"}), 404
+
+    chat.is_read = True
+    db.session.commit()
+    return jsonify(chat.to_dict()), 200
+
 
 # ========== ADD BLUEPRINT TO APP ==========
 
