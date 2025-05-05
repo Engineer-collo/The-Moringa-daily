@@ -4,7 +4,7 @@ from flask_cors import CORS
 from flask_restful import Api
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
+from server.models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
 from datetime import timedelta
 
 app = Flask(__name__)
@@ -350,14 +350,14 @@ def approve_content(content_id):
     return jsonify({"message": "Content approved successfully"}), 200
 
 # --- Chat System  ROUTES---
-@resources_bp.route('/api/chats', methods=['GET'])
+@resources_bp.route('/chats', methods=['GET'])
 @jwt_required()
 def get_all_chats():
     current_user = get_jwt_identity()
     chats = Conversation.query.filter((Conversation.user1_id == current_user) | (Conversation.user2_id == current_user)).all()
     return jsonify([c.id for c in chats]), 200
 
-@resources_bp.route('/api/chats/<int:recipient_id>', methods=['GET', 'POST'])
+@resources_bp.route('/chats/<int:recipient_id>', methods=['GET', 'POST'])
 @jwt_required()
 def handle_chat(recipient_id):
     current_user = get_jwt_identity()
@@ -385,7 +385,7 @@ def handle_chat(recipient_id):
     messages = Message.query.filter_by(conversation_id=conversation.id).all()
     return jsonify([m.content for m in messages]), 200
 
-@resources_bp.route('/api/chats/shared-content', methods=['GET'])
+@resources_bp.route('/chats/shared-content', methods=['GET'])
 @jwt_required()
 def get_shared_content():
     current_user = get_jwt_identity()
