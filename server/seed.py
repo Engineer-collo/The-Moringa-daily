@@ -1,6 +1,6 @@
 from datetime import datetime
-from app import app, db  # replace 'yourapp' with the actual module name (e.g., 'app')
-from models import User, Content, Category, Profile, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
+from server.app import app, db  
+from server.models import User, Content, Category, Profile, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
 
 def create_sample_data():
     with app.app_context():
@@ -19,11 +19,11 @@ def create_sample_data():
         user1.set_password("123456789")
         db.session.add(user1)
 
-        user2 = User(username="ken", email="ken@moringa.techwriter.com")
+        user2 = User(username="collax", email="collinsshunza@moringa.techwriter.com")
         user2.set_password("123456789")
         db.session.add(user2)
 
-        user3 = User(username="maryy", email="maryy@moringa.admin.com")
+        user3 = User(username="collorazy", email="collinsshunza@moringa.admin.com")
         user3.set_password("123456789")
         db.session.add(user3)
 

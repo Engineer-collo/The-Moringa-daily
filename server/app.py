@@ -4,18 +4,14 @@ from flask_cors import CORS
 from flask_restful import Api
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
+from server.models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
 from datetime import timedelta
+from server.cloudinary_utils.video_upload import video_upload_bp
 
-app = Flask(__name__)
+app = Flask(__name__, instance_relative_config=True)
+app.config.from_object('server.config')
 
-# ========== CONFIGURATION ==========
-
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///moringa.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = '4bfbece877bc4c6a9276b4f9f0203a45d722bbfd02728c7d823438120c8b5c91'
-app.config['JWT_SECRET_KEY'] = 'd9cbf61a59b0c1e24e9fc62547c3d524c97a35d7e283c902835de5d61b126bde'
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=10)
+app.register_blueprint(video_upload_bp, url_prefix='/api/video_upload')
 
 # ========== INITIALIZE EXTENSIONS ==========
 
@@ -27,7 +23,7 @@ jwt = JWTManager(app)
 
 # ========== BLUEPRINT ==========
 
-resources_bp = Blueprint('resources', __name__)
+resources_bp = Blueprint('resources', ___name___)
 
 # ========== ERROR HANDLING ==========
 
@@ -86,14 +82,19 @@ def register():
     if 'password' not in data or not data['password']:
         return jsonify({"error": "Password is required"}), 400
 
+    # Check if email already exists
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({"error": "Email already registered"}), 400
+
     try:
+        # Use generate_password_hash with correct method directly
         hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
         
         # Create new user with all required fields including username
         user = User(
             username=data['username'],
             email=data['email'],
-            password=hashed_password
+            password=generate_password_hash(data['password'], method='pbkdf2:sha256')
         )
         user.assign_role()  # If you have a method to assign role
         
@@ -111,10 +112,11 @@ def login():
     data = request.get_json()
     user = User.query.filter_by(email=data['email']).first()
     if user and check_password_hash(user.password, data['password']):
+        additional_claims = {"role": user.role} if hasattr(user, 'role') else {}
         access_token = create_access_token(
             identity=user.id,
             additional_claims={"role": user.role}
-            )
+            , additional_claims=additional_claims)
         return jsonify(access_token=access_token), 200
     return jsonify({"error": "Invalid credentials"}), 401
 
@@ -284,6 +286,24 @@ def like_content():
     db.session.commit()
     return jsonify(like.to_dict()), 201
 
+# ========== COMMENT ROUTES ==========
+
+@resources_bp.route('/content/<int:content_id>/comments', methods=['GET'])
+@jwt_required()
+def get_threaded_comments(content_id):
+    top_level = Comment.query.filter_by(content_id=content_id, parent_comment_id=None).all()
+    return jsonify([build_comment_tree(comment) for comment in top_level])
+
+def build_comment_tree(comment):
+    return {
+        "id": comment.id,
+        "user": comment.user.username,
+        "body": comment.body,
+        "created_at": comment.created_at.isoformat(),
+        "replies": [build_comment_tree(c) for c in comment.replies]
+    }
+
+
 # ========== SHARE ROUTES ==========
 
 @resources_bp.route('/share', methods=['POST'])
@@ -331,11 +351,53 @@ def approve_content(content_id):
     db.session.commit()
     return jsonify({"message": "Content approved successfully"}), 200
 
+# --- Chat System  ROUTES---
+@resources_bp.route('/chats', methods=['GET'])
+@jwt_required()
+def get_all_chats():
+    current_user = get_jwt_identity()
+    chats = Conversation.query.filter((Conversation.user1_id == current_user) | (Conversation.user2_id == current_user)).all()
+    return jsonify([c.id for c in chats]), 200
+
+@resources_bp.route('/chats/<int:recipient_id>', methods=['GET', 'POST'])
+@jwt_required()
+def handle_chat(recipient_id):
+    current_user = get_jwt_identity()
+    conversation = Conversation.query.filter_by(user1_id=min(current_user, recipient_id), user2_id=max(current_user, recipient_id)).first()
+    if not conversation:
+        if request.method == 'POST':
+            conversation = Conversation(user1_id=min(current_user, recipient_id), user2_id=max(current_user, recipient_id))
+            db.session.add(conversation)
+            db.session.commit()
+        else:
+            return jsonify([]), 200
+
+    if request.method == 'POST':
+        data = request.get_json()
+        message = Message(
+            conversation_id=conversation.id,
+            sender_id=current_user,
+            recipient_id=recipient_id,
+            content=data['content']
+        )
+        db.session.add(message)
+        db.session.commit()
+        return jsonify({"message": "sent"}), 201
+    
+    messages = Message.query.filter_by(conversation_id=conversation.id).all()
+    return jsonify([m.content for m in messages]), 200
+
+@resources_bp.route('/chats/shared-content', methods=['GET'])
+@jwt_required()
+def get_shared_content():
+    current_user = get_jwt_identity()
+    shares = Share.query.filter_by(user_id=current_user).all()
+    return jsonify([s.to_dict() for s in shares]), 200
 
 
 # ========== ADD BLUEPRINT TO APP ==========
 
 app.register_blueprint(resources_bp, url_prefix='/api')
 
-if __name__ == '_main_':
+if __name__ == '__main__':
     app.run(debug=True)
