@@ -393,7 +393,7 @@ def get_shared_content():
     return jsonify([s.to_dict() for s in shares]), 200
 
 
-# ------------------------- Content Approval Routes -------------------------
+# ---CONTENT APPROVAL ROUTES---
 
 @resources_bp.route('/content/<int:content_id>/approve', methods=['POST'])
 @jwt_required()
@@ -419,9 +419,84 @@ def flag_content(content_id):
     db.session.commit()
     return jsonify({"message": "Flagged"}), 200
 
+# ---Subscriptions & Wishlist ROUTES---
+
+@resources_bp.route('/user/subscriptions', methods=['GET'])
+@jwt_required()
+def get_user_subscriptions():
+    current_user = get_jwt_identity()
+    subs = Subscription.query.filter_by(user_id=current_user).all()
+    return jsonify([s.to_dict() for s in subs]), 200
+
+@resources_bp.route('/user/wishlist', methods=['GET'])
+@jwt_required()
+def get_user_wishlist():
+    current_user = get_jwt_identity()
+    wish = Wishlist.query.filter_by(user_id=current_user).all()
+    return jsonify([w.to_dict() for w in wish]), 200
+
+# ---Logout  Routes---
+
+@resources_bp.route('/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    response = jsonify({"message": "Logout successful"})
+    unset_jwt_cookies(response)
+    return response
+
+# --- Likes System Routes ---
+
+@resources_bp.route('/like', methods=['DELETE'])
+@jwt_required()
+def unlike_content():
+    data = request.get_json()
+    current_user = get_jwt_identity()
+    like = Like.query.filter_by(user_id=current_user, content_id=data['content_id']).first()
+    if like:
+        db.session.delete(like)
+        db.session.commit()
+    return jsonify({"message": "Like removed"}), 200
+
+@resources_bp.route('/likes/<int:content_id>', methods=['GET'])
+def get_like_count(content_id):
+    count = Like.query.filter_by(content_id=content_id).count()
+    return jsonify({"like_count": count}), 200
+
+# --- Comment Replies ---
+
+@resources_bp.route('/comments/<int:comment_id>/reply', methods=['POST'])
+@jwt_required()
+def reply_to_comment(comment_id):
+    data = request.get_json()
+    current_user = get_jwt_identity()
+    reply = Comment(
+        user_id=current_user,
+        content_id=data['content_id'],
+        body=data['body'],
+        parent_comment_id=comment_id
+    )
+    db.session.add(reply)
+    db.session.commit()
+    return jsonify(reply.to_dict()), 201
+
+# ---Chat Shared Posts ---
+
+@resources_bp.route('/chat/<int:user_id>/shared', methods=['GET'])
+@jwt_required()
+def get_shared_posts(user_id):
+    current_user = get_jwt_identity()
+    shares = Share.query.filter(
+        ((Share.user_id == current_user) & (Share.shared_with == user_id)) |
+        ((Share.user_id == user_id) & (Share.shared_with == current_user))
+    ).all()
+    return jsonify([s.to_dict() for s in shares]), 200
+
+
+
 # ========== ADD BLUEPRINT TO APP ==========
 
 app.register_blueprint(resources_bp, url_prefix='/api')
 
 if __name__ == '__main__':
     app.run(debug=True)
+
