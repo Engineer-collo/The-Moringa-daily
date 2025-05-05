@@ -13,6 +13,7 @@ faker = "*"
 flask = "*"
 sqlalchemy-serializer = "*"
 flask-cors = "*"
+cloudinary = "*"
 
 [dev-packages]
 
