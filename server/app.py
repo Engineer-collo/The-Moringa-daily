@@ -393,7 +393,31 @@ def get_shared_content():
     return jsonify([s.to_dict() for s in shares]), 200
 
 
+# ------------------------- Content Approval Routes -------------------------
 
+@resources_bp.route('/content/<int:content_id>/approve', methods=['POST'])
+@jwt_required()
+def approve_content(content_id):
+    content = Content.query.get(content_id)
+    content.is_approved = True
+    db.session.commit()
+    return jsonify({"message": "Approved"}), 200
+
+@resources_bp.route('/content/<int:content_id>/decline', methods=['POST'])
+@jwt_required()
+def decline_content(content_id):
+    content = Content.query.get(content_id)
+    content.is_approved = False
+    db.session.commit()
+    return jsonify({"message": "Declined"}), 200
+
+@resources_bp.route('/content/<int:content_id>/flag', methods=['POST'])
+@jwt_required()
+def flag_content(content_id):
+    content = Content.query.get(content_id)
+    content.is_flagged = True
+    db.session.commit()
+    return jsonify({"message": "Flagged"}), 200
 
 # ========== ADD BLUEPRINT TO APP ==========
 
