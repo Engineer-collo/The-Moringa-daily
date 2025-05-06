@@ -7,6 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
 from datetime import timedelta
 from cloudinary_utils.video_upload import video_upload_bp
+from flask_socketio import SocketIO
 
 app = Flask(__name__, instance_relative_config=True)
 app.config.from_object('config')
@@ -19,6 +20,7 @@ migrate = Migrate(app, db)
 CORS(app, supports_credentials=True, origins=['http://localhost:5173'])
 api = Api(app)
 jwt = JWTManager(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # In-memory token blocklist to handle logout
 jwt_blocklist = set()
@@ -357,16 +359,27 @@ def get_all_chats():
 @jwt_required()
 def handle_chat(recipient_id):
     current_user = get_jwt_identity()
-    conversation = Conversation.query.filter_by(user1_id=min(current_user, recipient_id), user2_id=max(current_user, recipient_id)).first()
+
+    # Check for or create the conversation
+    conversation = Conversation.query.filter_by(
+        user1_id=min(current_user, recipient_id),
+        user2_id=max(current_user, recipient_id)
+    ).first()
+
     if not conversation:
         if request.method == 'POST':
-            conversation = Conversation(user1_id=min(current_user, recipient_id), user2_id=max(current_user, recipient_id))
+            conversation = Conversation(
+                user1_id=min(current_user, recipient_id),
+                user2_id=max(current_user, recipient_id)
+            )
             db.session.add(conversation)
             db.session.commit()
         else:
             return jsonify([]), 200
+
     if request.method == 'POST':
         data = request.get_json()
+
         message = Message(
             conversation_id=conversation.id,
             sender_id=current_user,
@@ -375,7 +388,23 @@ def handle_chat(recipient_id):
         )
         db.session.add(message)
         db.session.commit()
+
+        # Fetch both users
+        sender = User.query.get(current_user)
+        receiver = User.query.get(recipient_id)
+
+        # Emit WebSocket event to all connected clients
+        emit('new_chat', {
+            'id': conversation.id,
+            'receiverName': receiver.username,
+            'lastMessage': message.content,
+            'lastMessageTime': message.timestamp.isoformat(),
+            'avatarUrl': receiver.profile.profile_picture if receiver.profile else None
+        }, broadcast=True)
+
         return jsonify({'message': 'sent'}), 201
+
+    # GET method - return conversation messages
     messages = Message.query.filter_by(conversation_id=conversation.id).all()
     return jsonify([m.content for m in messages]), 200
 
@@ -390,5 +419,10 @@ def get_shared_content():
 
 app.register_blueprint(resources_bp, url_prefix='/api')
 
+# ========== SOCKETIO EVENTS ==========
+@socketio.on('connect')
+def on_connect():
+    print('Client connected')
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    socketio.run.run(debug=True)
