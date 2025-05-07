@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
 from datetime import timedelta
 from cloudinary_utils.video_upload import video_upload_bp
-from flask_socketio import SocketIO
+from flask_socketio import SocketIO, emit
 
 app = Flask(__name__, instance_relative_config=True)
 app.config.from_object('config')
@@ -17,7 +17,7 @@ app.register_blueprint(video_upload_bp, url_prefix='/api/video_upload')
 
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app, supports_credentials=True, origins=['http://localhost:5173'])
+CORS(app, supports_credentials=True)
 api = Api(app)
 jwt = JWTManager(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -43,7 +43,7 @@ def handle_exception(error):
 
 # ========== USER ROUTES ==========
 
-@resources_bp.route('/user', methods=['GET'])
+@resources_bp.route('/api/user', methods=['GET'])
 @jwt_required()
 def get_user_data():
     try:
@@ -56,7 +56,7 @@ def get_user_data():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@resources_bp.route('/admin/users', methods=['GET'])
+@resources_bp.route('/api/admin/users', methods=['GET'])
 @jwt_required()
 def get_all_users():
     current_user_id = get_jwt_identity()
@@ -68,7 +68,7 @@ def get_all_users():
 
 # ========== AUTH ROUTES ==========
 
-@resources_bp.route('/register', methods=['POST'])
+@resources_bp.route('/api/register', methods=['POST'])
 def register():
     if not request.is_json:
         return jsonify({'error': 'Content-Type must be application/json'}), 400
@@ -94,7 +94,7 @@ def register():
     except Exception as e:
         return jsonify({'error': str(e)}), 400
 
-@resources_bp.route('/login', methods=['POST'])
+@resources_bp.route('/api/login', methods=['POST'])
 def login():
     if not request.is_json:
         return jsonify({'error': 'Content-Type must be application/json'}), 400
@@ -115,62 +115,92 @@ def logout():
 
 # ========== PROFILE ROUTES ==========
 
-@resources_bp.route('/profile', methods=['GET'])
+@resources_bp.route('/api/profile', methods=['GET'])
 @jwt_required()
 def get_profile():
     current_user = get_jwt_identity()
     profile = Profile.query.filter_by(user_id=current_user).first()
-    if profile:
-        return jsonify(profile.to_dict()), 200
-    return jsonify({'message': 'Profile not found'}), 404
+    user = User.query.get(current_user)
+    if profile and user:
+        return jsonify({
+            **profile.to_dict(),
+            'username': user.username,
+            'email': user.email,
+            'role': user.role,
+            'avatarUrl': profile.profile_picture,
+            'posts': [content.to_dict() for content in user.content_posts]
+        }), 200
+    return jsonify({'error': 'Profile not found'}), 404
 
-@resources_bp.route('/profile', methods=['POST'])
+@resources_bp.route('/api/profile', methods=['POST'])
 @jwt_required()
 def create_profile():
     data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Request body must be JSON'}), 400
+
+    if 'bio' not in data or not data['bio']:
+        return jsonify({'error': 'Bio is required'}), 400
+
     current_user = get_jwt_identity()
+
     if Profile.query.filter_by(user_id=current_user).first():
-        return jsonify({'message': 'Profile already exists'}), 400
-    profile = Profile(user_id=current_user, bio=data.get('bio'), profile_picture=data.get('profile_picture'), website=data.get('website'))
+        return jsonify({'error': 'Profile already exists'}), 400
+
+    profile = Profile(
+        user_id=current_user,
+        bio=data['bio'],
+        profile_picture=data.get('profile_picture'),
+        website=data.get('website')
+    )
+
     db.session.add(profile)
     db.session.commit()
-    return jsonify(profile.to_dict()), 201
+    return jsonify({'message': 'Profile created successfully', 'profile': profile.to_dict()}), 201
 
-@resources_bp.route('/profile', methods=['PUT'])
+
+@resources_bp.route('/api/profile', methods=['PUT'])
 @jwt_required()
 def update_profile():
     data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Request body must be JSON'}), 400
+
     current_user = get_jwt_identity()
     profile = Profile.query.filter_by(user_id=current_user).first()
+
     if not profile:
-        return jsonify({'message': 'Profile not found'}), 404
+        return jsonify({'error': 'Profile not found'}), 404
+
     profile.bio = data.get('bio', profile.bio)
     profile.profile_picture = data.get('profile_picture', profile.profile_picture)
     profile.website = data.get('website', profile.website)
-    db.session.commit()
-    return jsonify(profile.to_dict()), 200
 
-@resources_bp.route('/profile', methods=['DELETE'])
+    db.session.commit()
+    return jsonify({'message': 'Profile updated successfully', 'profile': profile.to_dict()}), 200
+
+
+@resources_bp.route('/api/profile', methods=['DELETE'])
 @jwt_required()
 def delete_profile():
     current_user = get_jwt_identity()
     profile = Profile.query.filter_by(user_id=current_user).first()
     if not profile:
-        return jsonify({'message': 'Profile not found'}), 404
+        return jsonify({'error': 'Profile not found'}), 404
     db.session.delete(profile)
     db.session.commit()
     return jsonify({'message': 'Profile deleted'}), 200
 
 # ========== CONTENT ROUTES ==========
 
-@resources_bp.route('/content', methods=['POST'])
+@resources_bp.route('/api/content', methods=['POST'])
 @jwt_required()
 def create_content():
     data = request.get_json()
     user_id = get_jwt_identity()
     content_type = data.get('content_type')
     if not content_type:
-        return jsonify({'message': 'content_type is required'}), 400
+        return jsonify({'error': 'content_type is required'}), 400
     content = Content(
         title=data.get('title'),
         body=data.get('body'),
@@ -182,17 +212,17 @@ def create_content():
     db.session.commit()
     return jsonify(content.to_dict()), 201
 
-@resources_bp.route('/content', methods=['GET'])
+@resources_bp.route('/api/content', methods=['GET'])
 def get_all_content():
     content = Content.query.all()
     return jsonify([c.to_dict() for c in content]), 200
 
-@resources_bp.route('/content/<int:content_id>', methods=['GET'])
+@resources_bp.route('/api/content/<int:content_id>', methods=['GET'])
 def get_content_by_id(content_id):
     content = Content.query.get_or_404(content_id)
     return jsonify(content.to_dict()), 200
 
-@resources_bp.route('/content/<int:content_id>', methods=['PATCH'])
+@resources_bp.route('/api/content/<int:content_id>', methods=['PATCH'])
 @jwt_required()
 def update_content(content_id):
     content = Content.query.get_or_404(content_id)
@@ -202,7 +232,7 @@ def update_content(content_id):
     db.session.commit()
     return jsonify(content.to_dict()), 200
 
-@resources_bp.route('/content/<int:content_id>', methods=['DELETE'])
+@resources_bp.route('/api/content/<int:content_id>', methods=['DELETE'])
 @jwt_required()
 def delete_content(content_id):
     content = Content.query.get_or_404(content_id)
@@ -212,18 +242,18 @@ def delete_content(content_id):
 
 # ========== CATEGORY ROUTES ==========
 
-@resources_bp.route('/categories', methods=['GET'])
+@resources_bp.route('/api/categories', methods=['GET'])
 def get_categories():
     return jsonify([c.to_dict() for c in Category.query.all()]), 200
 
-@resources_bp.route('/categories', methods=['POST'])
+@resources_bp.route('/api/categories', methods=['POST'])
 @jwt_required()
 def add_category():
     data = request.get_json()
     if 'name' not in data:
         return jsonify({'error': 'Category name is required'}), 400
     if Category.query.filter_by(name=data['name']).first():
-        return jsonify({'message': 'Category already exists'}), 400
+        return jsonify({'error': 'Category already exists'}), 400
     category = Category(name=data['name'])
     db.session.add(category)
     db.session.commit()
@@ -231,16 +261,34 @@ def add_category():
 
 # ========== SUBSCRIPTION ROUTES ==========
 
-@resources_bp.route('/subscribe/category/<int:category_id>', methods=['POST'])
+@resources_bp.route('/api/subscribe/category/<int:category_id>', methods=['POST'])
 @jwt_required()
 def subscribe_category(category_id):
-    current_user = get_jwt_identity()
-    subscription = Subscription(user_id=current_user, category_id=category_id)
-    db.session.add(subscription)
-    db.session.commit()
-    return jsonify(subscription.to_dict()), 201
+    try:
+        current_user = get_jwt_identity()
 
-@resources_bp.route('/subscribe/content/<int:content_id>', methods=['POST'])
+        # Check if category exists
+        category = Category.query.get(category_id)
+        if not category:
+            return jsonify({'error': 'Category not found'}), 404
+
+        # Check if already subscribed
+        existing = Subscription.query.filter_by(user_id=current_user, category_id=category_id).first()
+        if existing:
+            return jsonify({'message': 'Already subscribed'}), 200
+
+        # Add new subscription
+        sub = Subscription(user_id=current_user, category_id=category_id)
+        db.session.add(sub)
+        db.session.commit()
+        return jsonify(sub.to_dict()), 201
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+@resources_bp.route('/api/subscribe/content/<int:content_id>', methods=['POST'])
 @jwt_required()
 def subscribe_content(content_id):
     current_user = get_jwt_identity()
@@ -249,7 +297,7 @@ def subscribe_content(content_id):
     db.session.commit()
     return jsonify(subscription.to_dict()), 201
 
-@resources_bp.route('/subscriptions/categories', methods=['GET'])
+@resources_bp.route('/api/subscriptions/categories', methods=['GET'])
 @jwt_required()
 def get_subscribed_categories():
     current_user = get_jwt_identity()
@@ -259,17 +307,20 @@ def get_subscribed_categories():
 
 # ========== WISHLIST ROUTES ==========
 
-@resources_bp.route('/wishlist', methods=['POST'])
+@resources_bp.route('/api/wishlist', methods=['POST'])
 @jwt_required()
 def add_to_wishlist():
     data = request.get_json()
+    if not data or 'content_id' not in data:
+        return jsonify({'error': 'content_id is required'}), 400
     current_user = get_jwt_identity()
     wishlist = Wishlist(user_id=current_user, content_id=data['content_id'])
     db.session.add(wishlist)
     db.session.commit()
     return jsonify(wishlist.to_dict()), 201
 
-@resources_bp.route('/wishlist', methods=['GET'])
+
+@resources_bp.route('/api/user/wishlist', methods=['GET'])
 @jwt_required()
 def get_wishlist():
     current_user = get_jwt_identity()
@@ -278,19 +329,19 @@ def get_wishlist():
 
 # ========== LIKE_ROUTES ==========
 
-@resources_bp.route('/like', methods=['POST'])
+@resources_bp.route('/api/like', methods=['POST'])
 @jwt_required()
 def like_content():
     data = request.get_json()
     current_user = get_jwt_identity()
-    like = Like(user_id=current_user, content_id=data['content_id'])
+    like = Like(user_id=current_user, content_id=data['content_id'], is_like=data.get('is_like', True))
     db.session.add(like)
     db.session.commit()
     return jsonify(like.to_dict()), 201
 
 # ========== COMMENT ROUTES ==========
 
-@resources_bp.route('/content/<int:content_id>/comments', methods=['GET'])
+@resources_bp.route('/api/content/<int:content_id>/comments', methods=['GET'])
 @jwt_required()
 def get_threaded_comments(content_id):
     top_level = Comment.query.filter_by(content_id=content_id, parent_comment_id=None).all()
@@ -307,18 +358,21 @@ def build_comment_tree(comment):
 
 # ========== SHARE ROUTES ==========
 
-@resources_bp.route('/share', methods=['POST'])
+@resources_bp.route('/api/share', methods=['POST'])
 @jwt_required()
 def share_content():
     data = request.get_json()
+    if not data or 'content_id' not in data or 'shared_with' not in data:
+        return jsonify({'error': 'content_id and shared_with are required'}), 400
     current_user = get_jwt_identity()
     share = Share(user_id=current_user, content_id=data['content_id'], shared_with=data['shared_with'])
     db.session.add(share)
     db.session.commit()
     return jsonify(share.to_dict()), 201
 
+
 #==============USER DEACTIVATION============#
-@resources_bp.route('/admin/users/<int:user_id>/deactivate', methods=['PATCH'])
+@resources_bp.route('/api/admin/users/<int:user_id>/deactivate', methods=['PATCH'])
 @jwt_required()
 def deactivate_user(user_id):
     current_user_id = get_jwt_identity()
@@ -333,7 +387,7 @@ def deactivate_user(user_id):
     return jsonify({'message': 'User deactivated successfully'}), 200
 
 #==============CONTENT APPROVAL=============#
-@resources_bp.route('/content/<int:content_id>/approve', methods=['POST'])
+@resources_bp.route('/api/content/<int:content_id>/approve', methods=['POST'])
 @jwt_required()
 def approve_content(content_id):
     current_user_id = get_jwt_identity()
@@ -348,14 +402,14 @@ def approve_content(content_id):
     return jsonify({'message': 'Content approved successfully'}), 200
 
 # --- Chat System  ROUTES---
-@resources_bp.route('/chats', methods=['GET'])
+@resources_bp.route('/api/chats', methods=['GET'])
 @jwt_required()
 def get_all_chats():
     current_user = get_jwt_identity()
     chats = Conversation.query.filter((Conversation.user1_id == current_user) | (Conversation.user2_id == current_user)).all()
     return jsonify([c.id for c in chats]), 200
 
-@resources_bp.route('/chats/<int:recipient_id>', methods=['GET', 'POST'])
+@resources_bp.route('/api/chats/<int:recipient_id>', methods=['GET', 'POST'])
 @jwt_required()
 def handle_chat(recipient_id):
     current_user = get_jwt_identity()
@@ -394,7 +448,7 @@ def handle_chat(recipient_id):
         receiver = User.query.get(recipient_id)
 
         # Emit WebSocket event to all connected clients
-        emit('new_chat', {
+        socketio.emit('new_chat', {
             'id': conversation.id,
             'receiverName': receiver.username,
             'lastMessage': message.content,
@@ -408,7 +462,7 @@ def handle_chat(recipient_id):
     messages = Message.query.filter_by(conversation_id=conversation.id).all()
     return jsonify([m.content for m in messages]), 200
 
-@resources_bp.route('/chats/shared-content', methods=['GET'])
+@resources_bp.route('/api/chats/shared-content', methods=['GET'])
 @jwt_required()
 def get_shared_content():
     current_user = get_jwt_identity()
@@ -425,4 +479,4 @@ def on_connect():
     print('Client connected')
 
 if __name__ == '__main__':
-    socketio.run.run(debug=True)
+    socketio.run(app, debug=True)

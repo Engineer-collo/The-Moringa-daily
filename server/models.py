@@ -33,6 +33,10 @@ class User(db.Model, SerializableMixin):
     wishlists = db.relationship("Wishlist", back_populates="user")
     shares = db.relationship("Share", back_populates="user")
     likes = db.relationship("Like", back_populates="user")  # Added likes relationship
+    messages_sent = db.relationship("Message", foreign_keys='Message.sender_id', backref="sender", lazy=True)
+    messages_received = db.relationship("Message", foreign_keys='Message.recipient_id', backref="recipient", lazy=True)
+    conversations_as_user1 = db.relationship("Conversation", foreign_keys='Conversation.user1_id', backref="user1", lazy=True)
+    conversations_as_user2 = db.relationship("Conversation", foreign_keys='Conversation.user2_id', backref="user2", lazy=True)
 
     @validates("email")
     def validate_email(self, key, email):
