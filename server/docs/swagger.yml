@@ -1,0 +1,301 @@
+swagger: "2.0"
+info:
+  title: The Moringa Daily API
+  description: Swagger documentation for The Moringa Daily backend.
+  version: "1.0.0"
+host: localhost:5000
+basePath: /api
+schemes:
+  - http
+paths:
+  /content:
+    post:
+      tags:
+        - Content
+      summary: Create new content
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: content
+          required: true
+          schema:
+            type: object
+            required:
+              - title
+              - body
+              - content_type
+              - category_id
+            properties:
+              title:
+                type: string
+              body:
+                type: string
+              content_type:
+                type: string
+              category_id:
+                type: integer
+      responses:
+        201:
+          description: Content created
+        400:
+          description: Missing or invalid data
+
+    get:
+      tags:
+        - Content
+      summary: Get all content
+      responses:
+        200:
+          description: List of content
+
+  /wishlist:
+    post:
+      tags:
+        - Wishlist
+      summary: Add content to wishlist
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: wishlist
+          required: true
+          schema:
+            type: object
+            required:
+              - content_id
+            properties:
+              content_id:
+                type: integer
+      responses:
+        201:
+          description: Added to wishlist
+
+  /like:
+    post:
+      tags:
+        - Like
+      summary: Like content
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: like
+          required: true
+          schema:
+            type: object
+            required:
+              - content_id
+            properties:
+              content_id:
+                type: integer
+      responses:
+        201:
+          description: Content liked
+
+  /categories:
+    get:
+      tags:
+        - Category
+      summary: Get all categories
+      responses:
+        200:
+          description: List of categories
+
+  /subscribe/category/{category_id}:
+    post:
+      tags:
+        - Subscription
+      summary: Subscribe to a category
+      parameters:
+        - in: path
+          name: category_id
+          required: true
+          type: integer
+      responses:
+        201:
+          description: Subscription successful
+
+  /share:
+    post:
+      tags:
+        - Share
+      summary: Share content
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: share
+          required: true
+          schema:
+            type: object
+            required:
+              - content_id
+            properties:
+              content_id:
+                type: integer
+      responses:
+        201:
+          description: Content shared
+
+  /admin/users:
+    get:
+      tags:
+        - Admin
+      summary: Get all users (admin only)
+      responses:
+        200:
+          description: List of users
+
+  /content/{content_id}/approve:
+    put:
+      tags:
+        - Admin
+      summary: Approve content (admin only)
+      parameters:
+        - in: path
+          name: content_id
+          required: true
+          type: integer
+      responses:
+        200:
+          description: Content approved
+  /register:
+    post:
+      tags:
+        - Auth
+      summary: Register a new user
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - username
+              - email
+              - password
+            properties:
+              username:
+                type: string
+              email:
+                type: string
+              password:
+                type: string
+      responses:
+        201:
+          description: User registered
+        400:
+          description: Validation error or existing email
+
+  /login:
+    post:
+      tags:
+        - Auth
+      summary: Log in a user and return JWT
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - email
+              - password
+            properties:
+              email:
+                type: string
+              password:
+                type: string
+      responses:
+        200:
+          description: Login successful
+        401:
+          description: Invalid credentials
+
+  /user:
+    get:
+      tags:
+        - User
+      summary: Get current authenticated user's data
+      security:
+        - bearerAuth: []
+      responses:
+        200:
+          description: User data
+        404:
+          description: User not found
+
+  /profile:
+    post:
+      tags:
+        - Profile
+      summary: Create a user profile
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: profile
+          required: true
+          schema:
+            type: object
+            properties:
+              bio:
+                type: string
+              profile_picture:
+                type: string
+              website:
+                type: string
+      responses:
+        201:
+          description: Profile created
+        400:
+          description: Profile already exists
+
+    get:
+      tags:
+        - Profile
+      summary: Get the current user's profile
+      responses:
+        200:
+          description: Profile data
+        404:
+          description: Profile not found
+
+    put:
+      tags:
+        - Profile
+      summary: Update the current user's profile
+      consumes:
+        - application/json
+      parameters:
+        - in: body
+          name: profile
+          schema:
+            type: object
+            properties:
+              bio:
+                type: string
+              profile_picture:
+                type: string
+              website:
+                type: string
+      responses:
+        200:
+          description: Profile updated
+        404:
+          description: Profile not found
+
+    delete:
+      tags:
+        - Profile
+      summary: Delete the current user's profile
+      responses:
+        200:
+          description: Profile deleted
+        404:
+          description: Profile not found

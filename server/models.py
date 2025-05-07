@@ -204,7 +204,7 @@ class Like(db.Model, SerializableMixin):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     content_id = db.Column(db.Integer, db.ForeignKey('content.id'), nullable=False)
-    is_like = db.Column(db.Boolean, nullable=False)  # True = like, False = dislike
+    is_like = db.Column(db.Boolean, nullable=False, default=True)  # True = like, False = dislike
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship("User", back_populates="likes")
