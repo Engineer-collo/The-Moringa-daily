@@ -8,12 +8,15 @@ flask-sqlalchemy = "*"
 flask-migrate = "*"
 flask-jwt-extended = "*"
 werkzeug = "==2.2.3"
-flask-restful = "*"
 faker = "*"
 flask = "*"
 sqlalchemy-serializer = "*"
 flask-cors = "*"
 cloudinary = "*"
+flask-restful = "*"
+flask-socketio = "*"
+eventlet = "*"
+
 
 [dev-packages]
 
