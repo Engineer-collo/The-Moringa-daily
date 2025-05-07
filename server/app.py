@@ -56,6 +56,7 @@ def get_user_data():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @resources_bp.route('/admin/users', methods=['GET'])
 @jwt_required()
 def get_all_users():
