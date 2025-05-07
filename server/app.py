@@ -4,20 +4,21 @@ from flask_cors import CORS
 from flask_restful import Api
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
+from server.models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
 from datetime import timedelta
-from cloudinary_utils.video_upload import video_upload_bp
+from server.cloudinary_utils.video_upload import video_upload_bp
 from flask_socketio import SocketIO, emit
 
 app = Flask(__name__, instance_relative_config=True)
-app.config.from_object('config')
+app.config.from_object('server.config')
 app.register_blueprint(video_upload_bp, url_prefix='/api/video_upload')
 
 # ========== INITIALIZE EXTENSIONS ==========
 
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app, supports_credentials=True)
+CORS(app, supports_credentials=True, resources={r"/api/*": {"origins": "*"}})
+
 api = Api(app)
 jwt = JWTManager(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -100,7 +101,7 @@ def login():
         return jsonify({'error': 'Content-Type must be application/json'}), 400
     data = request.get_json()
     user = User.query.filter_by(email=data.get('email')).first()
-    if user and check_password_hash(user.password, data.get('password')):
+    if user and user.check_password(data.get('password')):
         additional_claims = {'role': user.role} if hasattr(user, 'role') else {}
         access_token = create_access_token(identity=user.id, additional_claims=additional_claims)
         return jsonify(access_token=access_token), 200
