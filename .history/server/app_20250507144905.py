@@ -8,23 +8,19 @@ from models import db, User, Profile, Content, Category, Subscription, ContentSu
 from datetime import timedelta
 from cloudinary_utils.video_upload import video_upload_bp
 from flask_socketio import SocketIO
-from flasgger import Swagger
-import os
 
 app = Flask(__name__, instance_relative_config=True)
-app.config.from_object('config')
+app.config.from_object('server.config')
 app.register_blueprint(video_upload_bp, url_prefix='/api/video_upload')
-
 
 # ========== INITIALIZE EXTENSIONS ==========
 
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app)
+CORS(app, supports_credentials=True, origins=['http://localhost:5173'])
 api = Api(app)
 jwt = JWTManager(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
-Swagger(app, template_file=os.path.join('docs', 'swagger.yml'))
 
 # In-memory token blocklist to handle logout
 jwt_blocklist = set()
@@ -110,7 +106,7 @@ def login():
         return jsonify(access_token=access_token), 200
     return jsonify({'error': 'Invalid credentials'}), 401
 
-@resources_bp.route('/logout ', methods=['POST'])
+@resources_bp.route('/logout', methods=['POST'])
 @jwt_required()
 def logout():
     jti = get_jwt().get('jti')
@@ -170,38 +166,49 @@ def delete_profile():
 @resources_bp.route('/content', methods=['POST'])
 @jwt_required()
 def create_content():
+    data = request.get_json()
     user_id = get_jwt_identity()
-
-    title = request.form.get('title')
-    body = request.form.get('body')
-    content_type = request.form.get('content_type')
-    category_id = request.form.get('category_id')
-    media_files = request.files.getlist('media')
-
-    # Validate required fields
-    if not title or not content_type or not category_id:
-        return jsonify({'error': 'Missing required fields'}), 422
-
-    # Validate uploaded media
-    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mov', 'avi'}
-    for file in media_files:
-        ext = file.filename.rsplit('.', 1)[-1].lower()
-        if ext not in allowed_extensions:
-            return jsonify({'error': f'Unsupported file type: {file.filename}'}), 400
-
-    # Create content (you can later store file URLs or handle uploads)
+    content_type = data.get('content_type')
+    if not content_type:
+        return jsonify({'message': 'content_type is required'}), 400
     content = Content(
-        title=title,
-        body=body,
+        title=data.get('title'),
+        body=data.get('body'),
         content_type=content_type,
-        category_id=category_id,
+        category_id=data.get('category_id'),
         author_id=user_id
     )
     db.session.add(content)
     db.session.commit()
-
     return jsonify(content.to_dict()), 201
 
+@resources_bp.route('/content', methods=['GET'])
+def get_all_content():
+    content = Content.query.all()
+    return jsonify([c.to_dict() for c in content]), 200
+
+@resources_bp.route('/content/<int:content_id>', methods=['GET'])
+def get_content_by_id(content_id):
+    content = Content.query.get_or_404(content_id)
+    return jsonify(content.to_dict()), 200
+
+@resources_bp.route('/content/<int:content_id>', methods=['PATCH'])
+@jwt_required()
+def update_content(content_id):
+    content = Content.query.get_or_404(content_id)
+    data = request.get_json()
+    for key, value in data.items():
+        setattr(content, key, value)
+    db.session.commit()
+    return jsonify(content.to_dict()), 200
+
+@resources_bp.route('/content/<int:content_id>', methods=['DELETE'])
+@jwt_required()
+def delete_content(content_id):
+    content = Content.query.get_or_404(content_id)
+    db.session.delete(content)
+    db.session.commit()
+    return '', 204
 
 # ========== CATEGORY ROUTES ==========
 
@@ -277,8 +284,7 @@ def get_wishlist():
 def like_content():
     data = request.get_json()
     current_user = get_jwt_identity()
-    is_like = data.get('is_like', True)
-    like = Like(user_id=current_user, content_id=data['content_id'], is_like=is_like)
+    like = Like(user_id=current_user, content_id=data['content_id'])
     db.session.add(like)
     db.session.commit()
     return jsonify(like.to_dict()), 201
@@ -434,6 +440,6 @@ app.register_blueprint(resources_bp, url_prefix='/api')
 def on_connect():
     print('Client connected')
 
-
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run.run(debug=True)
+
