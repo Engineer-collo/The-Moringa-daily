@@ -242,9 +242,22 @@ class Share(db.Model, SerializableMixin):
     content = db.relationship("Content", back_populates="shares")
 
 
-    @validates("shared_with")
-    def validate_shared_with(self, key, value):
-        if not value or '@' not in value:
-            raise ValueError("shared_with must be a valid email address.")
-        return value
+
+#  Chat System (conversation and message models)
+
+class Conversation(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user1_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    user2_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    messages = db.relationship('Message', backref='conversation', lazy=True)
+
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey('conversation.id'))
+    sender_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    recipient_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    content = db.Column(db.Text, nullable=False)
+    timestamp = db.Column(db.DateTime, default=db.func.now())
+
 

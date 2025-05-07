@@ -2,28 +2,33 @@ from flask import Flask, jsonify, request, Blueprint
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_restful import Api
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
+from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
 from datetime import timedelta
+from cloudinary_utils.video_upload import video_upload_bp
+from flask_socketio import SocketIO
 
-app = Flask(__name__)
-
-# ========== CONFIGURATION ==========
-
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///moringa.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = '4bfbece877bc4c6a9276b4f9f0203a45d722bbfd02728c7d823438120c8b5c91'
-app.config['JWT_SECRET_KEY'] = 'd9cbf61a59b0c1e24e9fc62547c3d524c97a35d7e283c902835de5d61b126bde'
-app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=10)
+app = Flask(__name__, instance_relative_config=True)
+app.config.from_object('config')
+app.register_blueprint(video_upload_bp, url_prefix='/api/video_upload')
 
 # ========== INITIALIZE EXTENSIONS ==========
 
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app, supports_credentials=True, origins=["http://localhost:5173"])
+CORS(app, supports_credentials=True, origins=['http://localhost:5173'])
 api = Api(app)
 jwt = JWTManager(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# In-memory token blocklist to handle logout
+jwt_blocklist = set()
+
+@jwt.token_in_blocklist_loader
+def check_if_token_revoked(jwt_header, jwt_payload):
+    jti = jwt_payload.get('jti')
+    return jti in jwt_blocklist
 
 # ========== BLUEPRINT ==========
 
@@ -33,8 +38,8 @@ resources_bp = Blueprint('resources', __name__)
 
 @app.errorhandler(Exception)
 def handle_exception(error):
-    """Handle all unhandled exceptions globally"""
-    return jsonify({"error": str(error)}), 500
+    '''Handle all unhandled exceptions globally'''
+    return jsonify({'error': str(error)}), 500
 
 # ========== USER ROUTES ==========
 
@@ -42,78 +47,71 @@ def handle_exception(error):
 @jwt_required()
 def get_user_data():
     try:
-        current_user_id = get_jwt_identity()  # Get the current user's ID from the JWT token
+        current_user_id = get_jwt_identity()
         user = User.query.get(current_user_id)
-        
         if user:
             return jsonify(user.to_dict()), 200
         else:
-            return jsonify({"error": "User not found"}), 404
-    
+            return jsonify({'error': 'User not found'}), 404
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
+        return jsonify({'error': str(e)}), 500
+
 @resources_bp.route('/admin/users', methods=['GET'])
 @jwt_required()
 def get_all_users():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
     if not user or user.role != 'admin':
-        return jsonify({"error": "Unauthorized access"}), 403
-
+        return jsonify({'error': 'Unauthorized access'}), 403
     users = User.query.all()
     return jsonify([u.to_dict() for u in users]), 200
-
 
 # ========== AUTH ROUTES ==========
 
 @resources_bp.route('/register', methods=['POST'])
 def register():
     if not request.is_json:
-        return jsonify({"error": "Content-Type must be application/json"}), 400
-    
+        return jsonify({'error': 'Content-Type must be application/json'}), 400
     data = request.get_json()
-    
-    # Check if username is provided
     if 'username' not in data or not data['username']:
-        return jsonify({"error": "Username is required"}), 400
-    
-    # Check if email is provided
+        return jsonify({'error': 'Username is required'}), 400
     if 'email' not in data or not data['email']:
-        return jsonify({"error": "Email is required"}), 400
-
-    # Check if password is provided
+        return jsonify({'error': 'Email is required'}), 400
     if 'password' not in data or not data['password']:
-        return jsonify({"error": "Password is required"}), 400
-
+        return jsonify({'error': 'Password is required'}), 400
+    if User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'Email already registered'}), 400
     try:
-        hashed_password = generate_password_hash(data['password'], method='sha256')
-        
-        # Create new user with all required fields including username
         user = User(
             username=data['username'],
             email=data['email'],
-            password=hashed_password
+            password=generate_password_hash(data['password'], method='pbkdf2:sha256')
         )
-        user.assign_role()  # If you have a method to assign role
-        
+        user.assign_role()
         db.session.add(user)
         db.session.commit()
-        
         return jsonify(user.to_dict()), 201
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
-    
+        return jsonify({'error': str(e)}), 400
+
 @resources_bp.route('/login', methods=['POST'])
 def login():
     if not request.is_json:
-        return jsonify({"error": "Content-Type must be application/json"}), 400
+        return jsonify({'error': 'Content-Type must be application/json'}), 400
     data = request.get_json()
-    user = User.query.filter_by(email=data['email']).first()
-    if user and check_password_hash(user.password, data['password']):
-        access_token = create_access_token(identity=user.id)
+    user = User.query.filter_by(email=data.get('email')).first()
+    if user and check_password_hash(user.password, data.get('password')):
+        additional_claims = {'role': user.role} if hasattr(user, 'role') else {}
+        access_token = create_access_token(identity=user.id, additional_claims=additional_claims)
         return jsonify(access_token=access_token), 200
-    return jsonify({"error": "Invalid credentials"}), 401
+    return jsonify({'error': 'Invalid credentials'}), 401
+
+@resources_bp.route('/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    jti = get_jwt().get('jti')
+    jwt_blocklist.add(jti)
+    return jsonify({'message': 'Successfully logged out'}), 200
 
 # ========== PROFILE ROUTES ==========
 
@@ -122,11 +120,9 @@ def login():
 def get_profile():
     current_user = get_jwt_identity()
     profile = Profile.query.filter_by(user_id=current_user).first()
-    
     if profile:
         return jsonify(profile.to_dict()), 200
-    
-    return jsonify({"message": "Profile not found"}), 404
+    return jsonify({'message': 'Profile not found'}), 404
 
 @resources_bp.route('/profile', methods=['POST'])
 @jwt_required()
@@ -134,7 +130,7 @@ def create_profile():
     data = request.get_json()
     current_user = get_jwt_identity()
     if Profile.query.filter_by(user_id=current_user).first():
-        return jsonify({"message": "Profile already exists"}), 400
+        return jsonify({'message': 'Profile already exists'}), 400
     profile = Profile(user_id=current_user, bio=data.get('bio'), profile_picture=data.get('profile_picture'), website=data.get('website'))
     db.session.add(profile)
     db.session.commit()
@@ -147,7 +143,7 @@ def update_profile():
     current_user = get_jwt_identity()
     profile = Profile.query.filter_by(user_id=current_user).first()
     if not profile:
-        return jsonify({"message": "Profile not found"}), 404
+        return jsonify({'message': 'Profile not found'}), 404
     profile.bio = data.get('bio', profile.bio)
     profile.profile_picture = data.get('profile_picture', profile.profile_picture)
     profile.website = data.get('website', profile.website)
@@ -160,10 +156,10 @@ def delete_profile():
     current_user = get_jwt_identity()
     profile = Profile.query.filter_by(user_id=current_user).first()
     if not profile:
-        return jsonify({"message": "Profile not found"}), 404
+        return jsonify({'message': 'Profile not found'}), 404
     db.session.delete(profile)
     db.session.commit()
-    return jsonify({"message": "Profile deleted"}), 200
+    return jsonify({'message': 'Profile deleted'}), 200
 
 # ========== CONTENT ROUTES ==========
 
@@ -172,19 +168,16 @@ def delete_profile():
 def create_content():
     data = request.get_json()
     user_id = get_jwt_identity()
-
-    content_type = data.get("content_type")
+    content_type = data.get('content_type')
     if not content_type:
-        return jsonify({"message": "content_type is required"}), 400
-
+        return jsonify({'message': 'content_type is required'}), 400
     content = Content(
-        title=data.get("title"),
-        body=data.get("body"),
+        title=data.get('title'),
+        body=data.get('body'),
         content_type=content_type,
-        category_id=data.get("category_id"),
+        category_id=data.get('category_id'),
         author_id=user_id
     )
-
     db.session.add(content)
     db.session.commit()
     return jsonify(content.to_dict()), 201
@@ -228,10 +221,9 @@ def get_categories():
 def add_category():
     data = request.get_json()
     if 'name' not in data:
-        return jsonify({"error": "Category name is required"}), 400
+        return jsonify({'error': 'Category name is required'}), 400
     if Category.query.filter_by(name=data['name']).first():
-        return jsonify({"message": "Category already exists"}), 400
-
+        return jsonify({'message': 'Category already exists'}), 400
     category = Category(name=data['name'])
     db.session.add(category)
     db.session.commit()
@@ -257,7 +249,15 @@ def subscribe_content(content_id):
     db.session.commit()
     return jsonify(subscription.to_dict()), 201
 
-# ========== WISHLIST ROUTE ==========
+@resources_bp.route('/subscriptions/categories', methods=['GET'])
+@jwt_required()
+def get_subscribed_categories():
+    current_user = get_jwt_identity()
+    subscriptions = Subscription.query.filter_by(user_id=current_user).all()
+    categories = [Category.query.get(sub.category_id) for sub in subscriptions]
+    return jsonify([c.to_dict() for c in categories]), 200
+
+# ========== WISHLIST ROUTES ==========
 
 @resources_bp.route('/wishlist', methods=['POST'])
 @jwt_required()
@@ -274,22 +274,10 @@ def add_to_wishlist():
 def get_wishlist():
     current_user = get_jwt_identity()
     wishlist_items = Wishlist.query.filter_by(user_id=current_user).all()
-    return jsonify([item.to_dict() for item in wishlist_items]), 200
 
-@resources_bp.route('/wishlist/<int:wishlist_id>', methods=['DELETE'])
-@jwt_required()
-def remove_from_wishlist(wishlist_id):
-    current_user = get_jwt_identity()
-    wishlist_item = Wishlist.query.filter_by(id=wishlist_id, user_id=current_user).first()
-    
-    if not wishlist_item:
-        return jsonify({"error": "Wishlist item not found"}), 404
-    
-    db.session.delete(wishlist_item)
-    db.session.commit()
-    return jsonify({"message": "Item removed from wishlist"}), 200
+    return jsonify([w.to_dict() for w in wishlist_items]), 200
 
-# ========== LIKE ROUTES ==========
+# ========== LIKE_ROUTES ==========
 
 @resources_bp.route('/like', methods=['POST'])
 @jwt_required()
@@ -324,13 +312,12 @@ def get_threaded_comments(content_id):
 
 def build_comment_tree(comment):
     return {
-        "id": comment.id,
-        "user": comment.user.username,
-        "body": comment.body,
-        "created_at": comment.created_at.isoformat(),
-        "replies": [build_comment_tree(c) for c in comment.replies]
+        'id': comment.id,
+        'user': comment.user.username,
+        'body': comment.body,
+        'created_at': comment.created_at.isoformat(),
+        'replies': [build_comment_tree(c) for c in comment.replies]
     }
-
 
 # ========== SHARE ROUTES ==========
 
@@ -351,16 +338,13 @@ def deactivate_user(user_id):
     current_user_id = get_jwt_identity()
     admin_user = User.query.get(current_user_id)
     if not admin_user or admin_user.role != 'admin':
-        return jsonify({"error": "Unauthorized access"}), 403
-
+        return jsonify({'error': 'Unauthorized access'}), 403
     user = User.query.get(user_id)
     if not user:
-        return jsonify({"error": "User not found"}), 404
-
+        return jsonify({'error': 'User not found'}), 404
     user.active = False
     db.session.commit()
-    return jsonify({"message": "User deactivated successfully"}), 200
-
+    return jsonify({'message': 'User deactivated successfully'}), 200
 
 #==============CONTENT APPROVAL=============#
 @resources_bp.route('/content/<int:content_id>/approve', methods=['POST'])
@@ -369,145 +353,93 @@ def approve_content(content_id):
     current_user_id = get_jwt_identity()
     admin_user = User.query.get(current_user_id)
     if not admin_user or admin_user.role != 'admin':
-        return jsonify({"error": "Unauthorized access"}), 403
-
+        return jsonify({'error': 'Unauthorized access'}), 403
     content = Content.query.get(content_id)
     if not content:
-        return jsonify({"error": "Content not found"}), 404
-
+        return jsonify({'error': 'Content not found'}), 404
     content.approved = True
     db.session.commit()
-    return jsonify({"message": "Content approved successfully"}), 200
+    return jsonify({'message': 'Content approved successfully'}), 200
 
-# ========== COMMENT ROUTES ==========
-
-@resources_bp.route('/content/<int:content_id>/comments', methods=['GET'])
-def get_content_comments(content_id):
-    comments = Comment.query.filter_by(content_id=content_id).order_by(Comment.created_at.desc()).all()
-    return jsonify([comment.to_dict() for comment in comments]), 200
-
-@resources_bp.route('/comments', methods=['POST'])
+# --- Chat System  ROUTES---
+@resources_bp.route('/chats', methods=['GET'])
 @jwt_required()
-def add_comment():
-    data = request.get_json()
+def get_all_chats():
     current_user = get_jwt_identity()
-    
-    if 'content_id' not in data or 'body' not in data:
-        return jsonify({"error": "content_id and body are required"}), 400
-    
-    comment = Comment(
-        user_id=current_user,
-        content_id=data['content_id'],
-        body=data['body']
-    )
-    
-    db.session.add(comment)
-    db.session.commit()
-    
-    # Create notification for content author
-    content = Content.query.get(data['content_id'])
-    if content and content.author_id != current_user:
-        notification = Notification(
-            user_id=content.author_id,
-            message=f"New comment on your post: {data['body'][:30]}..."
-        )
-        db.session.add(notification)
-        db.session.commit()
-    
-    return jsonify(comment.to_dict()), 201
+    chats = Conversation.query.filter((Conversation.user1_id == current_user) | (Conversation.user2_id == current_user)).all()
+    return jsonify([c.id for c in chats]), 200
 
-@resources_bp.route('/comments/<int:comment_id>', methods=['DELETE'])
+@resources_bp.route('/chats/<int:recipient_id>', methods=['GET', 'POST'])
 @jwt_required()
-def delete_comment(comment_id):
+def handle_chat(recipient_id):
     current_user = get_jwt_identity()
-    comment = Comment.query.get_or_404(comment_id)
-    
-    if comment.user_id != current_user:
-        user = User.query.get(current_user)
-        if not user or user.role != 'admin':
-            return jsonify({"error": "Unauthorized to delete this comment"}), 403
-    
-    db.session.delete(comment)
-    db.session.commit()
-    return jsonify({"message": "Comment deleted"}), 200
 
-# ========== NOTIFICATION ROUTES ==========
-
-@resources_bp.route('/notifications', methods=['GET'])
-@jwt_required()
-def get_notifications():
-    current_user = get_jwt_identity()
-    notifications = Notification.query.filter_by(user_id=current_user)\
-        .order_by(Notification.created_at.desc()).all()
-    return jsonify([n.to_dict() for n in notifications]), 200
-
-@resources_bp.route('/notifications/<int:notification_id>/read', methods=['PATCH'])
-@jwt_required()
-def mark_notification_read(notification_id):
-    current_user = get_jwt_identity()
-    notification = Notification.query.filter_by(
-        id=notification_id, 
-        user_id=current_user
+    # Check for or create the conversation
+    conversation = Conversation.query.filter_by(
+        user1_id=min(current_user, recipient_id),
+        user2_id=max(current_user, recipient_id)
     ).first()
-    
-    if not notification:
-        return jsonify({"error": "Notification not found"}), 404
-    
-    notification.is_read = True
-    db.session.commit()
-    return jsonify(notification.to_dict()), 200
 
-# ========== CONTENT STATS ROUTES ==========
+    if not conversation:
+        if request.method == 'POST':
+            conversation = Conversation(
+                user1_id=min(current_user, recipient_id),
+                user2_id=max(current_user, recipient_id)
+            )
+            db.session.add(conversation)
+            db.session.commit()
+        else:
+            return jsonify([]), 200
 
-@resources_bp.route('/content/<int:content_id>/stats', methods=['GET'])
-def get_content_stats(content_id):
-    content = Content.query.get_or_404(content_id)
-    
-    stats = {
-        'likes_count': Like.query.filter_by(content_id=content_id).count(),
-        'comments_count': Comment.query.filter_by(content_id=content_id).count(),
-        'shares_count': Share.query.filter_by(content_id=content_id).count()
-    }
-    
-    return jsonify(stats), 200
+    if request.method == 'POST':
+        data = request.get_json()
 
-# ========== USER CONTENT ROUTES ==========
+        message = Message(
+            conversation_id=conversation.id,
+            sender_id=current_user,
+            recipient_id=recipient_id,
+            content=data['content']
+        )
+        db.session.add(message)
+        db.session.commit()
 
-@resources_bp.route('/user/<int:user_id>/content', methods=['GET'])
-def get_user_content(user_id):
-    content = Content.query.filter_by(author_id=user_id)\
-        .order_by(Content.created_at.desc()).all()
-    return jsonify([c.to_dict() for c in content]), 200
+        # Fetch both users
+        sender = User.query.get(current_user)
+        receiver = User.query.get(recipient_id)
 
-# ========== SEARCH ROUTES ==========
+        # Emit WebSocket event to all connected clients
+        emit('new_chat', {
+            'id': conversation.id,
+            'receiverName': receiver.username,
+            'lastMessage': message.content,
+            'lastMessageTime': message.timestamp.isoformat(),
+            'avatarUrl': receiver.profile.profile_picture if receiver.profile else None
+        }, broadcast=True)
 
-@resources_bp.route('/search', methods=['GET'])
-def search_content():
-    query = request.args.get('q')
-    if not query or len(query) < 2:
-        return jsonify({"error": "Search query must be at least 2 characters"}), 400
-    
-    # Search in titles and bodies
-    content_results = Content.query.filter(
-        (Content.title.ilike(f'%{query}%')) | 
-        (Content.body.ilike(f'%{query}%'))
-    ).all()
-    
-    # Search in categories
-    category_results = Category.query.filter(
-        Category.name.ilike(f'%{query}%')
-    ).all()
-    
-    return jsonify({
-        'content': [c.to_dict() for c in content_results],
-        'categories': [cat.to_dict() for cat in category_results]
-    }), 200
+        return jsonify({'message': 'sent'}), 201
+
+    # GET method - return conversation messages
+    messages = Message.query.filter_by(conversation_id=conversation.id).all()
+    return jsonify([m.content for m in messages]), 200
+
+@resources_bp.route('/chats/shared-content', methods=['GET'])
+@jwt_required()
+def get_shared_content():
+    current_user = get_jwt_identity()
+    shares = Share.query.filter_by(user_id=current_user).all()
+    return jsonify([s.to_dict() for s in shares]), 200
+
 
 # ========== ADD BLUEPRINT TO APP ==========
 
 app.register_blueprint(resources_bp, url_prefix='/api')
 
 
+# ========== SOCKETIO EVENTS ==========
+@socketio.on('connect')
+def on_connect():
+    print('Client connected')
 
 if __name__ == '__main__':
-       app.run(debug=True)
+    socketio.run.run(debug=True)
+

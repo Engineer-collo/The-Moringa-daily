@@ -1,6 +1,6 @@
 from datetime import datetime
-from app import app, db  # replace 'yourapp' with the actual module name (e.g., 'app')
-from models import User, Content, Category, Profile, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
+from server.app import app, db  
+from server.models import User, Content, Category, Profile, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share
 
 def create_sample_data():
     with app.app_context():
@@ -43,7 +43,7 @@ def create_sample_data():
 
         # Create some sample content posts
         content1 = Content(title="The Future of AI", body="Artificial Intelligence is evolving fast...", content_type="Article", author_id=user1.id, category_id=category1.id)
-        content2 = Content(title="Space Exploration", body="Humanity is moving towards the stars...", content_type="Article", author_id=user2.id, category_id=category2.id)
+        content2 = Content(titlcollinsshue="Space Exploration", body="Humanity is moving towards the stars...", content_type="Article", author_id=user2.id, category_id=category2.id)
         content3 = Content(title="E-learning Trends", body="Online education is on the rise...", content_type="Article", author_id=user3.id, category_id=category3.id)
         db.session.add_all([content1, content2, content3])
         db.session.commit()  # Ensure content records are committed before creating comments
