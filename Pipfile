@@ -16,7 +16,7 @@ cloudinary = "*"
 flask-restful = "*"
 flask-socketio = "*"
 eventlet = "*"
-
+gunicorn = "*"
 
 [dev-packages]
 
