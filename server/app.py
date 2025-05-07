@@ -274,6 +274,7 @@ def add_to_wishlist():
 def get_wishlist():
     current_user = get_jwt_identity()
     wishlist_items = Wishlist.query.filter_by(user_id=current_user).all()
+
     return jsonify([w.to_dict() for w in wishlist_items]), 200
 
 # ========== LIKE_ROUTES ==========
@@ -287,6 +288,19 @@ def like_content():
     db.session.add(like)
     db.session.commit()
     return jsonify(like.to_dict()), 201
+
+@resources_bp.route('/like/<int:like_id>', methods=['DELETE'])
+@jwt_required()
+def unlike_content(like_id):
+    current_user = get_jwt_identity()
+    like = Like.query.filter_by(id=like_id, user_id=current_user).first()
+    
+    if not like:
+        return jsonify({"error": "Like not found"}), 404
+    
+    db.session.delete(like)
+    db.session.commit()
+    return jsonify({"message": "Content unliked"}), 200
 
 # ========== COMMENT ROUTES ==========
 
@@ -415,9 +429,11 @@ def get_shared_content():
     shares = Share.query.filter_by(user_id=current_user).all()
     return jsonify([s.to_dict() for s in shares]), 200
 
+
 # ========== ADD BLUEPRINT TO APP ==========
 
 app.register_blueprint(resources_bp, url_prefix='/api')
+
 
 # ========== SOCKETIO EVENTS ==========
 @socketio.on('connect')
@@ -426,3 +442,4 @@ def on_connect():
 
 if __name__ == '__main__':
     socketio.run.run(debug=True)
+
