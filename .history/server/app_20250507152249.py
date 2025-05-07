@@ -440,6 +440,7 @@ app.register_blueprint(resources_bp, url_prefix='/api')
 def on_connect():
     print('Client connected')
 
+# ...existing code...
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)

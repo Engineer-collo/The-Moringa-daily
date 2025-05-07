@@ -4,20 +4,20 @@ from flask_cors import CORS
 from flask_restful import Api
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 from werkzeug.security import generate_password_hash, check_password_hash
-from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
+from server.models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
 from datetime import timedelta
-from cloudinary_utils.video_upload import video_upload_bp
+from server.cloudinary_utils.video_upload import video_upload_bp
 from flask_socketio import SocketIO
 
 app = Flask(__name__, instance_relative_config=True)
-app.config.from_object('config')
+app.config.from_object('server/config')
 app.register_blueprint(video_upload_bp, url_prefix='/api/video_upload')
 
 # ========== INITIALIZE EXTENSIONS ==========
 
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app)
+CORS(app, supports_credentials=True, origins=['http://localhost:5173'])
 api = Api(app)
 jwt = JWTManager(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -440,6 +440,6 @@ app.register_blueprint(resources_bp, url_prefix='/api')
 def on_connect():
     print('Client connected')
 
-
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run.run(debug=True)
+

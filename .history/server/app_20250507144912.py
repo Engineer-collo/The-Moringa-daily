@@ -17,7 +17,7 @@ app.register_blueprint(video_upload_bp, url_prefix='/api/video_upload')
 
 db.init_app(app)
 migrate = Migrate(app, db)
-CORS(app)
+CORS(app, supports_credentials=True, origins=['http://localhost:5173'])
 api = Api(app)
 jwt = JWTManager(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -440,6 +440,6 @@ app.register_blueprint(resources_bp, url_prefix='/api')
 def on_connect():
     print('Client connected')
 
-
 if __name__ == '__main__':
-    socketio.run(app, debug=True)
+    socketio.run.run(debug=True)
+
