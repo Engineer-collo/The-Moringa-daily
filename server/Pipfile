@@ -15,9 +15,9 @@ flask-cors = "*"
 cloudinary = "*"
 flask-restful = "*"
 flask-socketio = "*"
-gunicorn = "*"
 eventlet = "*"
 python-dotenv = "*"
+gunicorn = "*"
 
 [dev-packages]
 
