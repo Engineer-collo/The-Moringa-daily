@@ -16,8 +16,8 @@ cloudinary = "*"
 flask-restful = "*"
 eventlet = "*"
 python-dotenv = "*"
-gunicorn = "*"
 flasgger = "*"
+gunicorn = "*"
 
 [dev-packages]
 

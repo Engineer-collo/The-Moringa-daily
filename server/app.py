@@ -24,9 +24,9 @@ cloudinary.config(
     secure=True
 )
 
-from .models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
-from .config import JWT_SECRET_KEY, SQLALCHEMY_DATABASE_URI
-from .cloudinary_utils.video_upload import video_upload_bp
+from models import db, User, Profile, Content, Category, Subscription, ContentSubscription, Wishlist, Comment, Like, Notification, Share, Conversation, Message
+from config import JWT_SECRET_KEY, SQLALCHEMY_DATABASE_URI
+from cloudinary_utils.video_upload import video_upload_bp
 
 # ========== EXTENSION INSTANCES ==========
 # db = SQLAlchemy()
@@ -37,7 +37,7 @@ api = Api()
 
 # ========== APP SETUP ==========
 app = Flask(__name__, instance_relative_config=True)
-app.config.from_object('server.config')
+app.config.from_object('config')
 app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
 app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
 
