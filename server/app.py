@@ -9,7 +9,6 @@ from flask_restful import Api
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity, get_jwt
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_socketio import SocketIO, emit
 from flasgger import Swagger
 from datetime import timedelta
 import cloudinary
@@ -34,7 +33,7 @@ from .cloudinary_utils.video_upload import video_upload_bp
 migrate = Migrate()
 jwt = JWTManager()
 api = Api()
-socketio = SocketIO(cors_allowed_origins="*")
+
 
 # ========== APP SETUP ==========
 app = Flask(__name__, instance_relative_config=True)
@@ -47,7 +46,7 @@ db.init_app(app)
 migrate.init_app(app, db)
 jwt.init_app(app)
 api.init_app(app)
-socketio.init_app(app)
+
 Swagger(app, template_file=os.path.join('docs', 'swagger.yml'))
 
 # CORS
@@ -677,69 +676,6 @@ def approve_content(content_id):
     return jsonify({'message': 'Content approved successfully'}), 200
 
 # --- Chat System  ROUTES---
-@resources_bp.route('/chats', methods=['GET'])
-@jwt_required()
-def get_all_chats():
-    current_user = get_jwt_identity()  # Get the current user ID from JWT token
-    chats = Conversation.query.filter(
-        (Conversation.user1_id == current_user) | (Conversation.user2_id == current_user)
-    ).all()  # Get all chats for the current user
-
-    if not chats:
-        return jsonify({'error': 'No chats found'}), 404  # If no chats are found, return an error
-    return jsonify([chat.to_dict() for chat in chats]), 200  # Return list of chats in JSON format
-
-
-@resources_bp.route('/chats/<int:recipient_id>', methods=['GET', 'POST'])
-@jwt_required()
-def handle_chat(recipient_id):
-    current_user = get_jwt_identity()
-
-    # Check for or create the conversation
-    conversation = Conversation.query.filter_by(
-        user1_id=min(current_user, recipient_id),
-        user2_id=max(current_user, recipient_id)
-    ).first()
-
-    if not conversation:
-        if request.method == 'POST':
-            conversation = Conversation(
-                user1_id=min(current_user, recipient_id),
-                user2_id=max(current_user, recipient_id)
-            )
-            db.session.add(conversation)
-            db.session.commit()
-        else:
-            return jsonify([]), 200
-
-    if request.method == 'POST':
-        data = request.get_json()
-
-        message = Message(
-            conversation_id=conversation.id,
-            sender_id=current_user,
-            recipient_id=recipient_id,
-            content=data['content']
-        )
-        db.session.add(message)
-        db.session.commit()
-
-        # Emit WebSocket event to all connected clients
-        receiver = User.query.get(recipient_id)
-        emit('new_chat', {
-            'id': conversation.id,
-            'receiverName': receiver.username,
-            'lastMessage': message.content,
-            'lastMessageTime': message.timestamp.isoformat(),
-            'avatarUrl': receiver.profile.profile_picture if receiver.profile else None
-        }, broadcast=True)
-
-        return jsonify({'message': 'sent'}), 201
-
-    # GET method - return conversation messages
-    messages = Message.query.filter_by(conversation_id=conversation.id).all()
-    return jsonify([m.content for m in messages]), 200
-
 @resources_bp.route('/shared/received', methods=['GET'])
 @jwt_required()
 def get_shared_with_me():
@@ -763,11 +699,6 @@ def get_shared_content():
 
 # ========== REGISTER ROUTES ==========
 app.register_blueprint(resources_bp, url_prefix='/api')
-
-# ========== SOCKET EVENTS ==========
-@socketio.on('connect')
-def on_connect():
-    print('Client connected')
 
 # ========== ENTRY POINT ==========
 if __name__ == '__main__':
