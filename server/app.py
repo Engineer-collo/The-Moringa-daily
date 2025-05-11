@@ -740,6 +740,19 @@ def handle_chat(recipient_id):
     messages = Message.query.filter_by(conversation_id=conversation.id).all()
     return jsonify([m.content for m in messages]), 200
 
+@resources_bp.route('/shared/received', methods=['GET'])
+@jwt_required()
+def get_shared_with_me():
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+    
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    shared_posts = Share.query.filter_by(shared_with=user.username).order_by(Share.created_at.desc()).all()
+    return jsonify([s.to_dict() for s in shared_posts]), 200
+
+
 @resources_bp.route('/chats/shared-content', methods=['GET'])
 @jwt_required()
 def get_shared_content():

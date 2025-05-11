@@ -277,8 +277,15 @@ class Share(db.Model, SerializableMixin):
 
     user = db.relationship("User", back_populates="shares")
     content = db.relationship("Content", back_populates="shares")
-
-
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'shared_with': self.shared_with,
+            'sender': self.user.username if self.user else None,
+            'content': self.content.to_dict() if self.content else None,
+            'created_at': self.created_at.isoformat()
+        }
 
 #  Chat System (conversation and message models)
 
