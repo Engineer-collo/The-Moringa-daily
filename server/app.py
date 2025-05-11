@@ -89,6 +89,7 @@ def get_user_data():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
 @resources_bp.route('/admin/users', methods=['GET'])
 @jwt_required()
 def get_all_users():
@@ -374,6 +375,7 @@ def create_content():
         return jsonify({'error': f'Media upload failed: {str(e)}'}), 500
 
     try:
+        # Create the content
         content = Content(
             title=title,
             body=body,
@@ -384,6 +386,17 @@ def create_content():
         )
         db.session.add(content)
         db.session.commit()
+
+        # Notify all users subscribed to this category
+        subscribers = Subscription.query.filter_by(category_id=category_id).all()
+        notifications = []
+        for sub in subscribers:
+            message = f"New post in '{category.name}': {title}"
+            notifications.append(Notification(user_id=sub.user_id, message=message))
+
+        db.session.add_all(notifications)
+        db.session.commit()
+
         return jsonify(content.to_dict()), 201
 
     except Exception as e:
@@ -600,10 +613,38 @@ def create_comment():
 def share_content():
     data = request.get_json()
     current_user = get_jwt_identity()
-    share = Share(user_id=current_user, content_id=data['content_id'], shared_with=data['shared_with'])
+
+    post_id = data.get('postId')
+    receiver_username = data.get('receiverUsername')
+
+    if not post_id or not receiver_username:
+        return jsonify({'error': 'Post ID and receiver username are required'}), 400
+
+    # Fetch the receiver user by username
+    receiver = User.query.filter_by(username=receiver_username).first()
+
+    if not receiver:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Create the share record
+    share = Share(user_id=current_user, content_id=post_id, shared_with=receiver_username)
     db.session.add(share)
     db.session.commit()
+
     return jsonify(share.to_dict()), 201
+
+
+@resources_bp.route('/search/users', methods=['GET'])
+@jwt_required()
+def search_users():
+    query = request.args.get('query', '')
+    if not query:
+        return jsonify({'error': 'Query parameter is required'}), 400
+
+    users = User.query.filter(User.username.ilike(f'{query}%')).all()  # Fetch users starting with the query
+    return jsonify([user.to_dict() for user in users]), 200
+
+
 
 #==============USER DEACTIVATION============#
 @resources_bp.route('/admin/users/<int:user_id>/deactivate', methods=['PATCH'])
@@ -639,9 +680,15 @@ def approve_content(content_id):
 @resources_bp.route('/chats', methods=['GET'])
 @jwt_required()
 def get_all_chats():
-    current_user = get_jwt_identity()
-    chats = Conversation.query.filter((Conversation.user1_id == current_user) | (Conversation.user2_id == current_user)).all()
-    return jsonify([c.id for c in chats]), 200
+    current_user = get_jwt_identity()  # Get the current user ID from JWT token
+    chats = Conversation.query.filter(
+        (Conversation.user1_id == current_user) | (Conversation.user2_id == current_user)
+    ).all()  # Get all chats for the current user
+
+    if not chats:
+        return jsonify({'error': 'No chats found'}), 404  # If no chats are found, return an error
+    return jsonify([chat.to_dict() for chat in chats]), 200  # Return list of chats in JSON format
+
 
 @resources_bp.route('/chats/<int:recipient_id>', methods=['GET', 'POST'])
 @jwt_required()
@@ -677,11 +724,8 @@ def handle_chat(recipient_id):
         db.session.add(message)
         db.session.commit()
 
-        # Fetch both users
-        sender = User.query.get(current_user)
-        receiver = User.query.get(recipient_id)
-
         # Emit WebSocket event to all connected clients
+        receiver = User.query.get(recipient_id)
         emit('new_chat', {
             'id': conversation.id,
             'receiverName': receiver.username,
@@ -699,9 +743,10 @@ def handle_chat(recipient_id):
 @resources_bp.route('/chats/shared-content', methods=['GET'])
 @jwt_required()
 def get_shared_content():
-    current_user = get_jwt_identity()
-    shares = Share.query.filter_by(user_id=current_user).all()
-    return jsonify([s.to_dict() for s in shares]), 200
+    current_user = get_jwt_identity()  # Get the current user ID from JWT token
+    shares = Share.query.filter_by(user_id=current_user).all()  # Fetch all shared content for the current user
+    return jsonify([s.to_dict() for s in shares]), 200  # Return shared content in JSON format
+
 
 # ========== REGISTER ROUTES ==========
 app.register_blueprint(resources_bp, url_prefix='/api')
