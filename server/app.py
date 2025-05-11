@@ -70,11 +70,6 @@ def check_if_token_revoked(jwt_header, jwt_payload):
 def handle_exception(error):
     return jsonify({'error': str(error)}), 500
 
-# ========== Paste All Your Routes Below This Line ========== #
-# Register, Login, Logout, User routes are already included above.
-# Paste the rest of your profile, content, category, subscriptions, etc. routes here.
-# Make sure all routes use @resources_bp.route(...)
-
 @resources_bp.route('/user', methods=['GET'])
 @jwt_required()
 def get_user_data():
@@ -204,7 +199,6 @@ def request_tech_writer():
     if not user:
         return jsonify({'error': 'User not found'}), 404
 
-    # Optional: you can add logic to prevent duplicate requests
     if user.requested_writer:
         return jsonify({'message': 'Request already sent'}), 200
 
@@ -374,7 +368,6 @@ def create_content():
         return jsonify({'error': f'Media upload failed: {str(e)}'}), 500
 
     try:
-        # Create the content
         content = Content(
             title=title,
             body=body,
@@ -386,7 +379,6 @@ def create_content():
         db.session.add(content)
         db.session.commit()
 
-        # Notify all users subscribed to this category
         subscribers = Subscription.query.filter_by(category_id=category_id).all()
         notifications = []
         for sub in subscribers:
@@ -583,7 +575,7 @@ def create_comment():
 
     content_id = data.get('content_id')
     body = data.get('body')
-    parent_id = data.get('parent_id')  # ✅ Optional for nested reply
+    parent_id = data.get('parent_id')  
 
     if not content_id or not body:
         return jsonify({'error': 'Missing content_id or body'}), 400
@@ -593,7 +585,7 @@ def create_comment():
             user_id=current_user,
             content_id=content_id,
             body=body,
-            parent_comment_id=parent_id  # ✅ Support reply nesting
+            parent_comment_id=parent_id  
         )
         db.session.add(comment)
         db.session.commit()
@@ -619,13 +611,11 @@ def share_content():
     if not post_id or not receiver_username:
         return jsonify({'error': 'Post ID and receiver username are required'}), 400
 
-    # Fetch the receiver user by username
     receiver = User.query.filter_by(username=receiver_username).first()
 
     if not receiver:
         return jsonify({'error': 'User not found'}), 404
 
-    # Create the share record
     share = Share(user_id=current_user, content_id=post_id, shared_with=receiver_username)
     db.session.add(share)
     db.session.commit()
@@ -640,7 +630,7 @@ def search_users():
     if not query:
         return jsonify({'error': 'Query parameter is required'}), 400
 
-    users = User.query.filter(User.username.ilike(f'{query}%')).all()  # Fetch users starting with the query
+    users = User.query.filter(User.username.ilike(f'{query}%')).all()  
     return jsonify([user.to_dict() for user in users]), 200
 
 
@@ -692,9 +682,9 @@ def get_shared_with_me():
 @resources_bp.route('/chats/shared-content', methods=['GET'])
 @jwt_required()
 def get_shared_content():
-    current_user = get_jwt_identity()  # Get the current user ID from JWT token
-    shares = Share.query.filter_by(user_id=current_user).all()  # Fetch all shared content for the current user
-    return jsonify([s.to_dict() for s in shares]), 200  # Return shared content in JSON format
+    current_user = get_jwt_identity()  
+    shares = Share.query.filter_by(user_id=current_user).all() 
+    return jsonify([s.to_dict() for s in shares]), 200
 
 
 # ========== REGISTER ROUTES ==========
