@@ -50,7 +50,7 @@ api.init_app(app)
 Swagger(app, template_file=os.path.join('docs', 'swagger.yml'))
 
 # CORS
-CORS(app, resources={r"/api/*": {"origins": "https://moringa-daily-dev.vercel.app/"}}, supports_credentials=True)
+CORS(app, resources={r"/api/*": {"origins": "https://moringa-daily-dev.vercel.app"}}, supports_credentials=True)
 
 # Register media upload blueprint
 app.register_blueprint(video_upload_bp, url_prefix='/api/video_upload')
