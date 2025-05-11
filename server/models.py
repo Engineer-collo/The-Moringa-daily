@@ -23,6 +23,7 @@ class User(db.Model, SerializableMixin):
     password = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default="user")
     requested_writer = db.Column(db.Boolean, default=False)
+    requested_admin = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -207,10 +208,8 @@ class Comment(db.Model, SerializableMixin):
     body = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    
     parent_comment_id = db.Column(db.Integer, db.ForeignKey('comments.id'), nullable=True)
 
-    
     user = db.relationship("User", back_populates="comments")
     content = db.relationship("Content", back_populates="comments")
     replies = db.relationship("Comment", backref=db.backref("parent", remote_side=[id]), lazy=True)
@@ -220,6 +219,20 @@ class Comment(db.Model, SerializableMixin):
         if not body or len(body.strip()) < 2:
             raise ValueError("Comment body must be at least 2 characters long.")
         return body
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'content_id': self.content_id,
+            'body': self.body,
+            'created_at': self.created_at.isoformat(),
+            'user': {
+                'username': self.user.username,
+                'profile_picture': self.user.profile.profile_picture if self.user.profile else None
+            },
+            'parent_id': self.parent_comment_id
+        }
+
 
 # Like Model
 class Like(db.Model, SerializableMixin):

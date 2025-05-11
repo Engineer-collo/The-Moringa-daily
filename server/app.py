@@ -264,6 +264,73 @@ def reject_techwriter(user_id):
 
     return jsonify({'message': 'Tech writer request rejected'}), 200
 
+@resources_bp.route('/request-admin', methods=['POST'])
+@jwt_required()
+def request_admin():
+    current_user_id = get_jwt_identity()
+    user = User.query.get(current_user_id)
+
+    if not user or user.role != 'techwriter':
+        return jsonify({'error': 'Only Tech Writers can request admin access'}), 403
+
+    if user.requested_admin:
+        return jsonify({'message': 'Request already sent'}), 200
+
+    user.requested_admin = True
+    db.session.commit()
+    return jsonify({'message': 'Admin request sent successfully'}), 200
+
+
+@resources_bp.route('/admin/admin-requests', methods=['GET'])
+@jwt_required()
+def get_admin_requests():
+    current_user = get_jwt_identity()
+    admin = User.query.get(current_user)
+
+    if not admin or admin.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    requests = User.query.filter_by(requested_admin=True, role='techwriter').all()
+    return jsonify([u.to_dict() for u in requests]), 200
+
+
+@resources_bp.route('/admin/admin-requests/approve/<int:user_id>', methods=['PATCH'])
+@jwt_required()
+def approve_admin_request(user_id):
+    current_user = get_jwt_identity()
+    admin = User.query.get(current_user)
+
+    if not admin or admin.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    user.role = 'admin'
+    user.requested_admin = False
+    db.session.commit()
+
+    return jsonify({'message': 'Admin request approved'}), 200
+
+
+@resources_bp.route('/admin/admin-requests/reject/<int:user_id>', methods=['PATCH'])
+@jwt_required()
+def reject_admin_request(user_id):
+    current_user = get_jwt_identity()
+    admin = User.query.get(current_user)
+
+    if not admin or admin.role != 'admin':
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    user.requested_admin = False
+    db.session.commit()
+
+    return jsonify({'message': 'Admin request rejected'}), 200
 
 
 # ========== CONTENT ROUTES ==========
@@ -501,16 +568,29 @@ def build_comment_tree(comment):
 def create_comment():
     data = request.get_json()
     current_user = get_jwt_identity()
+
     content_id = data.get('content_id')
     body = data.get('body')
+    parent_id = data.get('parent_id')  # ✅ Optional for nested reply
 
     if not content_id or not body:
         return jsonify({'error': 'Missing content_id or body'}), 400
 
-    comment = Comment(user_id=current_user, content_id=content_id, body=body)
-    db.session.add(comment)
-    db.session.commit()
-    return jsonify(comment.to_dict()), 201
+    try:
+        comment = Comment(
+            user_id=current_user,
+            content_id=content_id,
+            body=body,
+            parent_comment_id=parent_id  # ✅ Support reply nesting
+        )
+        db.session.add(comment)
+        db.session.commit()
+
+        return jsonify(comment.to_dict()), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 
 
 # ========== SHARE ROUTES ==========
