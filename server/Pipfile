@@ -18,6 +18,7 @@ flask-socketio = "*"
 eventlet = "*"
 python-dotenv = "*"
 gunicorn = "*"
+flasgger = "*"
 
 [dev-packages]
 
