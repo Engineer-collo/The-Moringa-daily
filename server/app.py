@@ -128,7 +128,7 @@ def register():
         return jsonify({'error': str(e)}), 400
 
 @resources_bp.route('/login', methods=['POST'])
-@cross_origin(origin='http://localhost:5173', supports_credentials=True)
+@cross_origin(origin='https://moringa-daily-dev.vercel.app/', supports_credentials=True)
 def login():
     if not request.is_json:
         return jsonify({'error': 'Content-Type must be application/json'}), 400
