@@ -2,6 +2,8 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from sqlalchemy.orm import validates
 from werkzeug.security import generate_password_hash, check_password_hash
+import json
+
 
 db = SQLAlchemy()
 
@@ -20,6 +22,7 @@ class User(db.Model, SerializableMixin):
     email = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(50), default="user")
+    requested_writer = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -79,6 +82,7 @@ class Profile(db.Model, SerializableMixin):
     user = db.relationship("User", back_populates="profile")
 
 # Content Model
+# Content Model
 class Content(db.Model, SerializableMixin):
     __tablename__ = 'content'
 
@@ -86,6 +90,7 @@ class Content(db.Model, SerializableMixin):
     title = db.Column(db.String(255), nullable=False)
     body = db.Column(db.Text, nullable=False)
     content_type = db.Column(db.String(50), nullable=False)
+    media_urls = db.Column(db.Text)  # store JSON string
     author_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     category_id = db.Column(db.Integer, db.ForeignKey('categories.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -93,6 +98,7 @@ class Content(db.Model, SerializableMixin):
     is_approved = db.Column(db.Boolean, default=False)
     is_flagged = db.Column(db.Boolean, default=False)
 
+    # Relationships
     author = db.relationship("User", back_populates="content_posts")
     category = db.relationship("Category", back_populates="content")
     comments = db.relationship("Comment", back_populates="content")
@@ -101,6 +107,7 @@ class Content(db.Model, SerializableMixin):
     subscriptions = db.relationship("ContentSubscription", back_populates="content")
     wishlists = db.relationship("Wishlist", back_populates="content")
 
+    # Validations
     @validates("title")
     def validate_title(self, key, title):
         if len(title) < 5:
@@ -115,10 +122,27 @@ class Content(db.Model, SerializableMixin):
 
     @validates("content_type")
     def validate_content_type(self, key, value):
-        allowed_types = ['article', 'video', 'podcast', 'document']
+        allowed_types = ['article', 'video', 'podcast', 'document', 'image']
         if value not in allowed_types:
             raise ValueError(f"Invalid content type. Allowed: {allowed_types}")
         return value
+
+    # Serializer
+    def to_dict(self):
+        data = super().to_dict()
+        try:
+            data['media_urls'] = json.loads(self.media_urls) if isinstance(self.media_urls, str) else self.media_urls
+        except Exception:
+            data['media_urls'] = []
+
+        data['author'] = {
+            'username': self.author.username if self.author else "Unknown",
+            'profile': {
+                'profile_picture': self.author.profile.profile_picture if self.author and self.author.profile else None
+            }
+        }
+
+        return data
 
 # Category Model
 class Category(db.Model, SerializableMixin):
